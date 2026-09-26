@@ -1,4 +1,4 @@
-defmodule PaseoRelay.Protocol do
+defmodule RamblaRelay.Protocol do
   @moduledoc false
 
   @maximum_frame_wire_bytes 32 * 1024 * 1024

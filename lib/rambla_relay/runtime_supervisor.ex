@@ -1,4 +1,4 @@
-defmodule PaseoRelay.RuntimeSupervisor do
+defmodule RamblaRelay.RuntimeSupervisor do
   @moduledoc false
 
   use Supervisor
@@ -8,8 +8,8 @@ defmodule PaseoRelay.RuntimeSupervisor do
   @impl true
   def init(config) do
     children = [
-      {PaseoRelay.Capacity, config},
-      {PaseoRelay.Listener, ref: PaseoRelay.Listener, config: config}
+      {RamblaRelay.Capacity, config},
+      {RamblaRelay.Listener, ref: RamblaRelay.Listener, config: config}
     ]
 
     Supervisor.init(children, strategy: :rest_for_one)

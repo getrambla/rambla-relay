@@ -1,4 +1,4 @@
-defmodule PaseoRelay.Metrics do
+defmodule RamblaRelay.Metrics do
   @moduledoc false
 
   use GenServer
@@ -43,7 +43,7 @@ defmodule PaseoRelay.Metrics do
     {1_000_000, :delivery_wait_le_1s, "1"},
     {10_000_000, :delivery_wait_le_10s, "10"}
   ]
-  @maximum_message_payload_bytes PaseoRelay.Protocol.maximum_message_payload_bytes()
+  @maximum_message_payload_bytes RamblaRelay.Protocol.maximum_message_payload_bytes()
   @frame_buckets [
     {1024, :frame_size_le_1k, "1024"},
     {64 * 1024, :frame_size_le_64k, "65536"},
@@ -84,9 +84,9 @@ defmodule PaseoRelay.Metrics do
              :inflight_delivery_bytes,
              :backpressured_sources
            ],
-      do: PaseoRelay.Capacity.value(name)
+      do: RamblaRelay.Capacity.value(name)
 
-  def value(:active_sessions), do: :syn.local_registry_count(:paseo_relay_owners)
+  def value(:active_sessions), do: :syn.local_registry_count(:rambla_relay_owners)
   def value(:beam_total_memory), do: :erlang.memory(:total)
   def value(:beam_process_memory), do: :erlang.memory(:processes)
   def value(:beam_binary_memory), do: :erlang.memory(:binary)
@@ -94,7 +94,7 @@ defmodule PaseoRelay.Metrics do
   def value(:max_frame_bytes), do: :atomics.get(max_frame(), 1)
   def value(name), do: :counters.get(counters(), index(name))
 
-  def snapshot, do: snapshot(PaseoRelay.Capacity.snapshot())
+  def snapshot, do: snapshot(RamblaRelay.Capacity.snapshot())
 
   def snapshot(capacity) when is_map(capacity) do
     @metrics
@@ -205,7 +205,7 @@ defmodule PaseoRelay.Metrics do
     @metrics
     |> Enum.filter(fn {name, _type, _public_name, _help} -> Map.has_key?(values, name) end)
     |> Enum.map_join("\n", fn {name, type, public_name, help} ->
-      full_name = "paseo_relay_#{public_name}"
+      full_name = "rambla_relay_#{public_name}"
 
       [
         "# HELP #{full_name} #{help}",
@@ -222,7 +222,7 @@ defmodule PaseoRelay.Metrics do
   defp snapshot_value(name, _capacity), do: value(name)
 
   defp render_delivery_histogram do
-    name = "paseo_relay_delivery_wait_seconds"
+    name = "rambla_relay_delivery_wait_seconds"
 
     buckets =
       Enum.map(@delivery_buckets, fn {_limit, counter, label} ->
@@ -244,7 +244,7 @@ defmodule PaseoRelay.Metrics do
 
   defp render_handshake_metrics do
     Enum.map_join(@handshake_outcomes, "\n", fn outcome ->
-      name = "paseo_relay_handshake_#{outcome}_total"
+      name = "rambla_relay_handshake_#{outcome}_total"
 
       series =
         for version <- @handshake_versions, type <- @handshake_types do
@@ -260,7 +260,7 @@ defmodule PaseoRelay.Metrics do
   end
 
   defp render_frame_histogram do
-    name = "paseo_relay_frame_size_bytes"
+    name = "rambla_relay_frame_size_bytes"
 
     buckets =
       Enum.map(@frame_buckets, fn {_limit, counter, label} ->

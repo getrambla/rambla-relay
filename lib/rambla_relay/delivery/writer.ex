@@ -1,9 +1,9 @@
-defmodule PaseoRelay.Delivery.Writer do
+defmodule RamblaRelay.Delivery.Writer do
   @moduledoc false
 
   use GenServer
 
-  alias PaseoRelay.Delivery.Deadline
+  alias RamblaRelay.Delivery.Deadline
 
   @type token :: reference()
   def start(destination, delivery_timeout_ms, control_queue_bytes),
@@ -62,8 +62,8 @@ defmodule PaseoRelay.Delivery.Writer do
 
   def handle_call({:write, token, opcode, payload}, from, %{active: %{token: token}} = state) do
     reference = make_ref()
-    PaseoRelay.Metrics.inc(:frames_forwarded)
-    PaseoRelay.Metrics.inc(:bytes_forwarded, byte_size(payload))
+    RamblaRelay.Metrics.inc(:frames_forwarded)
+    RamblaRelay.Metrics.inc(:bytes_forwarded, byte_size(payload))
     send(state.destination, {:relay_frame, self(), reference, opcode, payload})
     send(state.destination, {:relay_write_barrier, self(), reference})
     active = %{state.active | write: from, write_reference: reference}
@@ -105,7 +105,7 @@ defmodule PaseoRelay.Delivery.Writer do
            queued_control_bytes: state.queued_control_bytes + bytes
        }}
     else
-      PaseoRelay.Metrics.inc(:slow_consumer_disconnects)
+      RamblaRelay.Metrics.inc(:slow_consumer_disconnects)
       send(state.destination, {:relay_close, 1013, "Slow consumer"})
       {:stop, :normal, {:error, :timeout}, reject_all(state, {:error, :timeout})}
     end
@@ -117,8 +117,8 @@ defmodule PaseoRelay.Delivery.Writer do
   end
 
   def handle_info({:reservation_timeout, token}, %{active: %{token: token}} = state) do
-    PaseoRelay.Metrics.inc(:delivery_timeouts)
-    PaseoRelay.Metrics.inc(:slow_consumer_disconnects)
+    RamblaRelay.Metrics.inc(:delivery_timeouts)
+    RamblaRelay.Metrics.inc(:slow_consumer_disconnects)
     send(state.destination, {:relay_close, 1013, "Slow consumer"})
     {:stop, :normal, reject_all(state, {:error, :timeout})}
   end
@@ -224,16 +224,16 @@ defmodule PaseoRelay.Delivery.Writer do
   defp start_control(payload, deadline, state) do
     case Deadline.remaining(deadline) do
       0 ->
-        PaseoRelay.Metrics.inc(:delivery_timeouts)
-        PaseoRelay.Metrics.inc(:slow_consumer_disconnects)
+        RamblaRelay.Metrics.inc(:delivery_timeouts)
+        RamblaRelay.Metrics.inc(:slow_consumer_disconnects)
         send(state.destination, {:relay_close, 1013, "Slow consumer"})
         {:expired, reject_all(state, {:error, :timeout})}
 
       timeout ->
         reference = make_ref()
         timer = Process.send_after(self(), {:reservation_timeout, reference}, timeout)
-        PaseoRelay.Metrics.inc(:frames_forwarded)
-        PaseoRelay.Metrics.inc(:bytes_forwarded, byte_size(payload))
+        RamblaRelay.Metrics.inc(:frames_forwarded)
+        RamblaRelay.Metrics.inc(:bytes_forwarded, byte_size(payload))
         send(state.destination, {:relay_frame, self(), reference, :text, payload})
         send(state.destination, {:relay_write_barrier, self(), reference})
 

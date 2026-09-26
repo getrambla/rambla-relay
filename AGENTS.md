@@ -1,8 +1,8 @@
-# Paseo Relay — Agent Guide
+# Rambla Relay — Agent Guide
 
-Paseo Relay is a distributed, protocol-compatible WebSocket relay for
-[Paseo](https://github.com/getpaseo/paseo). Daemons and clients meet here by
-`serverId`; frames are end-to-end encrypted by the Paseo protocol, so the
+Rambla Relay is a distributed, protocol-compatible WebSocket relay for
+[Rambla](https://github.com/getrambla/rambla). Daemons and clients meet here by
+`serverId`; frames are end-to-end encrypted by the Rambla protocol, so the
 relay never sees content. It is written in Elixir/OTP: Cowboy/Ranch serves the
 public listener, a per-`serverId` owner process pins each session to one BEAM
 node via [Syn](https://hexdocs.pm/syn/readme.html), and a deployment adapter

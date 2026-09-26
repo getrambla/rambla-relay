@@ -1,16 +1,16 @@
-defmodule PaseoRelay.OperationsTest do
+defmodule RamblaRelay.OperationsTest do
   use ExUnit.Case, async: false
 
-  alias PaseoRelay.Operations
+  alias RamblaRelay.Operations
 
   setup do
-    PaseoRelay.Drain.cancel()
-    on_exit(&PaseoRelay.Drain.cancel/0)
+    RamblaRelay.Drain.cancel()
+    on_exit(&RamblaRelay.Drain.cancel/0)
     :ok
   end
 
   test "health is live while readiness refuses new work during a drain" do
-    PaseoRelay.Drain.begin()
+    RamblaRelay.Drain.begin()
     live = Operations.response("/health")
     draining = Operations.response("/ready")
 
@@ -22,29 +22,29 @@ defmodule PaseoRelay.OperationsTest do
     {status, _content_type, metrics} = Operations.response("/metrics")
 
     assert status == 200
-    assert metrics =~ "# TYPE paseo_relay_ready gauge"
-    assert metrics =~ "# TYPE paseo_relay_draining gauge"
-    assert metrics =~ "# TYPE paseo_relay_active_websockets gauge"
-    assert metrics =~ "# TYPE paseo_relay_active_sessions gauge"
-    assert metrics =~ "# TYPE paseo_relay_reroute_responses_total counter"
-    assert metrics =~ "# TYPE paseo_relay_frames_forwarded_total counter"
-    assert metrics =~ "# TYPE paseo_relay_bytes_forwarded_total counter"
-    assert metrics =~ "# TYPE paseo_relay_ingress_reserved_bytes gauge"
-    assert metrics =~ "# TYPE paseo_relay_inflight_delivery_bytes gauge"
-    assert metrics =~ "# TYPE paseo_relay_backpressured_sources gauge"
-    assert metrics =~ "# TYPE paseo_relay_delivery_wait_seconds histogram"
-    assert metrics =~ "# TYPE paseo_relay_frame_size_bytes histogram"
-    assert metrics =~ "# TYPE paseo_relay_beam_binary_memory_bytes gauge"
-    assert metrics =~ "paseo_relay_ready 1"
-    assert metrics =~ "paseo_relay_draining 0"
+    assert metrics =~ "# TYPE rambla_relay_ready gauge"
+    assert metrics =~ "# TYPE rambla_relay_draining gauge"
+    assert metrics =~ "# TYPE rambla_relay_active_websockets gauge"
+    assert metrics =~ "# TYPE rambla_relay_active_sessions gauge"
+    assert metrics =~ "# TYPE rambla_relay_reroute_responses_total counter"
+    assert metrics =~ "# TYPE rambla_relay_frames_forwarded_total counter"
+    assert metrics =~ "# TYPE rambla_relay_bytes_forwarded_total counter"
+    assert metrics =~ "# TYPE rambla_relay_ingress_reserved_bytes gauge"
+    assert metrics =~ "# TYPE rambla_relay_inflight_delivery_bytes gauge"
+    assert metrics =~ "# TYPE rambla_relay_backpressured_sources gauge"
+    assert metrics =~ "# TYPE rambla_relay_delivery_wait_seconds histogram"
+    assert metrics =~ "# TYPE rambla_relay_frame_size_bytes histogram"
+    assert metrics =~ "# TYPE rambla_relay_beam_binary_memory_bytes gauge"
+    assert metrics =~ "rambla_relay_ready 1"
+    assert metrics =~ "rambla_relay_draining 0"
   end
 
   test "readiness and its metric stay false until the configured cluster floor is present" do
     visible_cluster_size =
-      length(:syn.subcluster_nodes(:registry, :paseo_relay_owners)) + 1
+      length(:syn.subcluster_nodes(:registry, :rambla_relay_owners)) + 1
 
     config = %{
-      PaseoRelay.Config.defaults()
+      RamblaRelay.Config.defaults()
       | minimum_cluster_size: visible_cluster_size + 1
     }
 
@@ -52,15 +52,15 @@ defmodule PaseoRelay.OperationsTest do
     {_status, _content_type, metrics} = Operations.response("/metrics", config)
 
     assert {elem(readiness, 0), elem(readiness, 2)} == {503, ~s({"status":"unready"})}
-    assert metrics =~ "paseo_relay_ready 0"
+    assert metrics =~ "rambla_relay_ready 0"
   end
 
   test "metrics recovers from an abrupt process failure without taking down the relay" do
-    supervisor = Process.whereis(PaseoRelay.Supervisor)
-    metrics = Process.whereis(PaseoRelay.Metrics)
+    supervisor = Process.whereis(RamblaRelay.Supervisor)
+    metrics = Process.whereis(RamblaRelay.Metrics)
     metrics_down = Process.monitor(metrics)
-    PaseoRelay.Metrics.inc(:reroute_responses)
-    reroutes_before_failure = PaseoRelay.Metrics.value(:reroute_responses)
+    RamblaRelay.Metrics.inc(:reroute_responses)
+    reroutes_before_failure = RamblaRelay.Metrics.value(:reroute_responses)
 
     Process.exit(metrics, :kill)
 
@@ -71,12 +71,12 @@ defmodule PaseoRelay.OperationsTest do
     assert Process.alive?(supervisor)
     assert Process.alive?(replacement)
     assert elem(response, 0) == 200
-    assert PaseoRelay.Metrics.value(:reroute_responses) == reroutes_before_failure
+    assert RamblaRelay.Metrics.value(:reroute_responses) == reroutes_before_failure
   end
 
   @tag timeout: 5_000
   test "readiness is bounded and unavailable while Capacity is stalled" do
-    capacity = Process.whereis(PaseoRelay.Capacity)
+    capacity = Process.whereis(RamblaRelay.Capacity)
     :ok = :sys.suspend(capacity)
 
     on_exit(fn ->
@@ -106,9 +106,9 @@ defmodule PaseoRelay.OperationsTest do
       await_no_active_websockets()
     end)
 
-    PaseoRelay.Metrics.inc(:reroute_responses)
-    reroutes = PaseoRelay.Metrics.value(:reroute_responses)
-    capacity = Process.whereis(PaseoRelay.Capacity)
+    RamblaRelay.Metrics.inc(:reroute_responses)
+    reroutes = RamblaRelay.Metrics.value(:reroute_responses)
+    capacity = Process.whereis(RamblaRelay.Capacity)
     :ok = :sys.suspend(capacity)
 
     on_exit(fn ->
@@ -120,23 +120,23 @@ defmodule PaseoRelay.OperationsTest do
     elapsed = System.monotonic_time(:millisecond) - started
 
     assert metrics =~ "HTTP/1.1 200 OK"
-    assert metrics =~ "paseo_relay_ready 0"
+    assert metrics =~ "rambla_relay_ready 0"
     assert elapsed < 1_500
-    refute metrics =~ "paseo_relay_active_websockets"
-    refute metrics =~ "paseo_relay_ingress_reserved_bytes"
-    refute metrics =~ "paseo_relay_inflight_delivery_bytes"
-    refute metrics =~ "paseo_relay_backpressured_sources"
-    assert metrics =~ "paseo_relay_reroute_responses_total #{reroutes}"
-    assert metrics =~ "paseo_relay_active_sessions"
-    assert metrics =~ "paseo_relay_delivery_wait_seconds"
-    assert metrics =~ "paseo_relay_beam_binary_memory_bytes"
+    refute metrics =~ "rambla_relay_active_websockets"
+    refute metrics =~ "rambla_relay_ingress_reserved_bytes"
+    refute metrics =~ "rambla_relay_inflight_delivery_bytes"
+    refute metrics =~ "rambla_relay_backpressured_sources"
+    assert metrics =~ "rambla_relay_reroute_responses_total #{reroutes}"
+    assert metrics =~ "rambla_relay_active_sessions"
+    assert metrics =~ "rambla_relay_delivery_wait_seconds"
+    assert metrics =~ "rambla_relay_beam_binary_memory_bytes"
 
     :ok = :sys.resume(capacity)
     :ok = :gen_tcp.close(websocket)
   end
 
   defp open_websocket(server_id) do
-    port = PaseoRelay.Listener.port(PaseoRelay.Listener)
+    port = RamblaRelay.Listener.port(RamblaRelay.Listener)
     {:ok, socket} = :gen_tcp.connect(~c"127.0.0.1", port, [:binary, active: false])
     key = Base.encode64(:crypto.strong_rand_bytes(16))
 
@@ -155,7 +155,7 @@ defmodule PaseoRelay.OperationsTest do
   end
 
   defp http_get(path, timeout \\ 2_000) do
-    port = PaseoRelay.Listener.port(PaseoRelay.Listener)
+    port = RamblaRelay.Listener.port(RamblaRelay.Listener)
     {:ok, socket} = :gen_tcp.connect(~c"127.0.0.1", port, [:binary, active: false])
     :ok = :gen_tcp.send(socket, "GET #{path} HTTP/1.0\r\nHost: relay.test\r\n\r\n")
     response = recv_all(socket, System.monotonic_time(:millisecond) + timeout, [])
@@ -179,7 +179,7 @@ defmodule PaseoRelay.OperationsTest do
   end
 
   defp await_metrics_replacement(previous, deadline) do
-    case Process.whereis(PaseoRelay.Metrics) do
+    case Process.whereis(RamblaRelay.Metrics) do
       replacement when is_pid(replacement) and replacement != previous ->
         replacement
 
@@ -200,7 +200,7 @@ defmodule PaseoRelay.OperationsTest do
 
   defp await_no_active_websockets(deadline) do
     cond do
-      PaseoRelay.Metrics.value(:active_websockets) == 0 ->
+      RamblaRelay.Metrics.value(:active_websockets) == 0 ->
         :ok
 
       System.monotonic_time(:millisecond) >= deadline ->

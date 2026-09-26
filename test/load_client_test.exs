@@ -1,4 +1,4 @@
-defmodule PaseoRelay.LoadClientTest.DelayedRelay do
+defmodule RamblaRelay.LoadClientTest.DelayedRelay do
   @behaviour :cowboy_handler
 
   @impl true
@@ -10,8 +10,8 @@ defmodule PaseoRelay.LoadClientTest.DelayedRelay do
       send(Keyword.fetch!(options, :owner), {:delayed_connection, self()})
     end
 
-    PaseoRelay.Socket.init(request, %{
-      config: PaseoRelay.Config.defaults(),
+    RamblaRelay.Socket.init(request, %{
+      config: RamblaRelay.Config.defaults(),
       connection_budget:
         {Keyword.fetch!(options, :budget_namespace), Keyword.fetch!(options, :max_websockets)},
       ownership_target: "local",
@@ -20,15 +20,15 @@ defmodule PaseoRelay.LoadClientTest.DelayedRelay do
   end
 end
 
-defmodule PaseoRelay.LoadClientTest do
+defmodule RamblaRelay.LoadClientTest do
   use ExUnit.Case, async: false
 
   setup context do
-    active_websockets = PaseoRelay.Metrics.value(:active_websockets)
+    active_websockets = RamblaRelay.Metrics.value(:active_websockets)
 
     on_exit(fn ->
       assert_eventually(fn ->
-        PaseoRelay.Metrics.value(:active_websockets) == active_websockets
+        RamblaRelay.Metrics.value(:active_websockets) == active_websockets
       end)
     end)
 
@@ -77,11 +77,11 @@ defmodule PaseoRelay.LoadClientTest do
     unavailable_port = available_port()
 
     relays = [
-      start_endpoint(PaseoRelay.LoadClientTest.DelayedRelay, relay_port,
+      start_endpoint(RamblaRelay.LoadClientTest.DelayedRelay, relay_port,
         delay_ms: 500,
         owner: self()
       ),
-      start_endpoint(PaseoRelay.Operations, unavailable_port, [])
+      start_endpoint(RamblaRelay.Operations, unavailable_port, [])
     ]
 
     on_exit(fn -> Enum.each(relays, &Process.exit(&1, :shutdown)) end)
@@ -400,16 +400,16 @@ defmodule PaseoRelay.LoadClientTest do
 
   defp start_endpoint(module, port, options) do
     reference = {:load_client_endpoint, System.unique_integer([:positive])}
-    config = PaseoRelay.Config.defaults()
+    config = RamblaRelay.Config.defaults()
 
     options =
       Keyword.merge([budget_namespace: reference, max_websockets: 20_000], options)
 
     routes =
-      if module == PaseoRelay.Operations do
+      if module == RamblaRelay.Operations do
         [{:_, module, config}]
       else
-        [{"/ws", module, options}, {:_, PaseoRelay.Operations, config}]
+        [{"/ws", module, options}, {:_, RamblaRelay.Operations, config}]
       end
 
     dispatch = :cowboy_router.compile([{:_, routes}])
@@ -467,21 +467,21 @@ defmodule PaseoRelay.LoadClientTest do
   end
 
   defp metric_value(metrics, name) do
-    [_, value] = Regex.run(~r/paseo_relay_#{name} (\d+)/, metrics)
+    [_, value] = Regex.run(~r/rambla_relay_#{name} (\d+)/, metrics)
     String.to_integer(value)
   end
 
   defp start_relay(port, listener) do
     runtime =
-      PaseoRelay.Config.defaults()
+      RamblaRelay.Config.defaults()
       |> Map.from_struct()
       |> Map.merge(Map.new([port: port] ++ listener))
-      |> PaseoRelay.Config.normalize()
+      |> RamblaRelay.Config.normalize()
 
     start =
       """
-      Application.put_env(:paseo_relay, :runtime, #{inspect(runtime)});
-      Application.ensure_all_started(:paseo_relay)
+      Application.put_env(:rambla_relay, :runtime, #{inspect(runtime)});
+      Application.ensure_all_started(:rambla_relay)
       """
 
     relay =

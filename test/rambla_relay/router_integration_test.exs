@@ -1,31 +1,31 @@
-defmodule PaseoRelay.RouterIntegrationTest do
+defmodule RamblaRelay.RouterIntegrationTest do
   use ExUnit.Case, async: false
 
   setup do
-    assert PaseoRelay.Metrics.value(:active_websockets) == 0
+    assert RamblaRelay.Metrics.value(:active_websockets) == 0
 
     on_exit(fn ->
-      assert_eventually(fn -> PaseoRelay.Metrics.value(:active_websockets) == 0 end)
+      assert_eventually(fn -> RamblaRelay.Metrics.value(:active_websockets) == 0 end)
     end)
 
     reference = {:router_integration, System.unique_integer([:positive])}
 
     start_supervised!(
-      {PaseoRelay.Listener,
+      {RamblaRelay.Listener,
        ref: reference,
-       config: PaseoRelay.Config.defaults(),
+       config: RamblaRelay.Config.defaults(),
        ip: {127, 0, 0, 1},
        port: 0,
        acceptors: 4,
        max_connections: 1_000}
     )
 
-    port = PaseoRelay.Listener.port(reference)
+    port = RamblaRelay.Listener.port(reference)
     %{port: port}
   end
 
   test "a locally owned websocket request upgrades", %{port: port} do
-    active_websockets = PaseoRelay.Metrics.value(:active_websockets)
+    active_websockets = RamblaRelay.Metrics.value(:active_websockets)
     {socket, response} = open_websocket(port, "srv_local")
     assert "HTTP/1.1 101" <> _ = response
     close_websocket(socket, active_websockets)
@@ -37,7 +37,7 @@ defmodule PaseoRelay.RouterIntegrationTest do
     assert "HTTP/1.1 426" <> _ =
              request(port, "/ws?serverId=#{server_id}&role=client&v=2")
 
-    assert :undefined == PaseoRelay.Ownership.owner_pid(server_id)
+    assert :undefined == RamblaRelay.Ownership.owner_pid(server_id)
   end
 
   test "an incomplete websocket handshake is rejected before it claims session ownership", %{
@@ -52,7 +52,7 @@ defmodule PaseoRelay.RouterIntegrationTest do
         ["Upgrade: websocket\r\n"]
       )
 
-    assert :undefined == PaseoRelay.Ownership.owner_pid(server_id)
+    assert :undefined == RamblaRelay.Ownership.owner_pid(server_id)
     assert "HTTP/1.1 426" <> _ = response
   end
 
@@ -62,7 +62,7 @@ defmodule PaseoRelay.RouterIntegrationTest do
     assert "HTTP/1.1 400" <> _ =
              request(port, "/ws?serverId=#{server_id}&role=client&v=2", websocket_headers())
 
-    assert :undefined == PaseoRelay.Ownership.owner_pid(server_id)
+    assert :undefined == RamblaRelay.Ownership.owner_pid(server_id)
 
     connection_id = String.duplicate("c", 257)
 
@@ -76,10 +76,10 @@ defmodule PaseoRelay.RouterIntegrationTest do
 
   test "health is live while readiness blocks new websocket ownership" do
     visible_cluster_size =
-      length(:syn.subcluster_nodes(:registry, :paseo_relay_owners)) + 1
+      length(:syn.subcluster_nodes(:registry, :rambla_relay_owners)) + 1
 
     config = %{
-      PaseoRelay.Config.defaults()
+      RamblaRelay.Config.defaults()
       | minimum_cluster_size: visible_cluster_size + 1
     }
 
@@ -105,7 +105,7 @@ defmodule PaseoRelay.RouterIntegrationTest do
     end)
 
     {:local, _owner, _reservation} =
-      :rpc.call(peer_node, PaseoRelay.Ownership, :route, [server_id, "peer-target"])
+      :rpc.call(peer_node, RamblaRelay.Ownership, :route, [server_id, "peer-target"])
 
     owner = await_owner(server_id)
     assert is_pid(owner)
@@ -120,7 +120,7 @@ defmodule PaseoRelay.RouterIntegrationTest do
   test "local admission pressure cannot suppress a remote owner reroute" do
     {peer, peer_node} = start_peer()
     server_id = "srv_remote_at_capacity_#{System.unique_integer([:positive])}"
-    port = start_listener(PaseoRelay.Config.defaults(), max_websockets: 1)
+    port = start_listener(RamblaRelay.Config.defaults(), max_websockets: 1)
     {local_socket, "HTTP/1.1 101" <> _response} = open_websocket(port, "local-capacity-holder")
 
     on_exit(fn ->
@@ -134,7 +134,7 @@ defmodule PaseoRelay.RouterIntegrationTest do
     end)
 
     {:local, _owner, _reservation} =
-      :rpc.call(peer_node, PaseoRelay.Ownership, :route, [server_id, "peer-target"])
+      :rpc.call(peer_node, RamblaRelay.Ownership, :route, [server_id, "peer-target"])
 
     owner = await_owner(server_id)
     assert node(owner) == peer_node
@@ -145,7 +145,7 @@ defmodule PaseoRelay.RouterIntegrationTest do
   end
 
   test "metrics exposes local names and values", %{port: port} do
-    before = PaseoRelay.Metrics.snapshot()
+    before = RamblaRelay.Metrics.snapshot()
     {socket, _response} = open_websocket(port, "srv_metrics")
 
     {:ok, <<0x81, sync_bytes, _sync_payload::binary-size(sync_bytes)>>} =
@@ -208,7 +208,7 @@ defmodule PaseoRelay.RouterIntegrationTest do
     :ok = :gen_tcp.send(socket, <<0x88, 0x80, mask::binary>>)
 
     assert_eventually(fn ->
-      PaseoRelay.Metrics.value(:active_websockets) == active_websockets
+      RamblaRelay.Metrics.value(:active_websockets) == active_websockets
     end)
 
     :ok = :gen_tcp.close(socket)
@@ -230,7 +230,7 @@ defmodule PaseoRelay.RouterIntegrationTest do
   end
 
   defp metric_value(metrics, name) do
-    [_, value] = Regex.run(~r/paseo_relay_#{name} (\d+)/, metrics)
+    [_, value] = Regex.run(~r/rambla_relay_#{name} (\d+)/, metrics)
     String.to_integer(value)
   end
 
@@ -245,13 +245,13 @@ defmodule PaseoRelay.RouterIntegrationTest do
 
     :ok = :rpc.call(peer_node, :application, :set_env, [:syn, :strict_mode, true])
     {:ok, _apps} = :rpc.call(peer_node, :application, :ensure_all_started, [:syn])
-    :ok = :rpc.call(peer_node, :syn, :add_node_to_scopes, [[:paseo_relay_owners]])
+    :ok = :rpc.call(peer_node, :syn, :add_node_to_scopes, [[:rambla_relay_owners]])
 
-    config = %{PaseoRelay.Config.defaults() | port: 0}
+    config = %{RamblaRelay.Config.defaults() | port: 0}
 
-    :ok = :rpc.call(peer_node, :application, :set_env, [:paseo_relay, :runtime, config])
+    :ok = :rpc.call(peer_node, :application, :set_env, [:rambla_relay, :runtime, config])
 
-    assert {:ok, _apps} = :rpc.call(peer_node, :application, :ensure_all_started, [:paseo_relay])
+    assert {:ok, _apps} = :rpc.call(peer_node, :application, :ensure_all_started, [:rambla_relay])
     {peer, peer_node}
   end
 
@@ -261,7 +261,7 @@ defmodule PaseoRelay.RouterIntegrationTest do
   end
 
   defp await_owner(server_id, deadline) do
-    case PaseoRelay.Ownership.owner_pid(server_id) do
+    case RamblaRelay.Ownership.owner_pid(server_id) do
       owner when is_pid(owner) ->
         owner
 
@@ -279,7 +279,7 @@ defmodule PaseoRelay.RouterIntegrationTest do
     reference = {:router_integration_configured, System.unique_integer([:positive])}
 
     start_supervised!(
-      {PaseoRelay.Listener,
+      {RamblaRelay.Listener,
        [
          ref: reference,
          config: config,
@@ -290,6 +290,6 @@ defmodule PaseoRelay.RouterIntegrationTest do
        ] ++ options}
     )
 
-    PaseoRelay.Listener.port(reference)
+    RamblaRelay.Listener.port(reference)
   end
 end

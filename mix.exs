@@ -1,14 +1,14 @@
-defmodule PaseoRelay.MixProject do
+defmodule RamblaRelay.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :paseo_relay,
+      app: :rambla_relay,
       version: "0.1.0",
       elixir: "~> 1.20",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
-      releases: [paseo_relay: [include_executables_for: [:unix]]],
+      releases: [rambla_relay: [include_executables_for: [:unix]]],
       # Cowlib's cookie advisory concerns its unused client encoder. Cowboy 2.17
       # rejects the response-splitting advisory's invalid headers server-side.
       hex: [ignore_advisories: ["CVE-2026-43966", "CVE-2026-43969", "CVE-2026-43971"]],
@@ -17,7 +17,7 @@ defmodule PaseoRelay.MixProject do
   end
 
   def application,
-    do: [extra_applications: [:logger, :syn, :cowboy], mod: {PaseoRelay.Application, []}]
+    do: [extra_applications: [:logger, :syn, :cowboy], mod: {RamblaRelay.Application, []}]
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_environment), do: ["lib"]

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Black-box WebSocket load client for Paseo Relay v2.
+ * Black-box WebSocket load client for Rambla Relay v2.
  * It intentionally knows only the public endpoint query contract: serverId,
  * role, connectionId, and v=2. It does not import relay implementation code.
  */

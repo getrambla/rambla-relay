@@ -1,10 +1,10 @@
-defmodule PaseoRelay.Operations do
+defmodule RamblaRelay.Operations do
   @moduledoc """
   Platform-neutral HTTP operations contract.
 
   `GET /health` reports liveness, `GET /ready` reports whether new relay work
   may be admitted, and `GET /metrics` exposes a small Prometheus-compatible
-  surface. A drain is activated through `PaseoRelay.Drain.begin/0`; it never
+  surface. A drain is activated through `RamblaRelay.Drain.begin/0`; it never
   depends on a deployment provider's control plane.
   """
   @behaviour :cowboy_handler
@@ -44,13 +44,13 @@ defmodule PaseoRelay.Operations do
 
     body =
       [
-        "# HELP paseo_relay_ready Whether this node admits new relay work.",
-        "# TYPE paseo_relay_ready gauge",
-        "paseo_relay_ready #{if(ready?(config, capacity_status), do: 1, else: 0)}",
-        "# HELP paseo_relay_draining Whether this node is draining.",
-        "# TYPE paseo_relay_draining gauge",
-        "paseo_relay_draining #{if(draining?(), do: 1, else: 0)}",
-        PaseoRelay.Metrics.render(capacity_status)
+        "# HELP rambla_relay_ready Whether this node admits new relay work.",
+        "# TYPE rambla_relay_ready gauge",
+        "rambla_relay_ready #{if(ready?(config, capacity_status), do: 1, else: 0)}",
+        "# HELP rambla_relay_draining Whether this node is draining.",
+        "# TYPE rambla_relay_draining gauge",
+        "rambla_relay_draining #{if(draining?(), do: 1, else: 0)}",
+        RamblaRelay.Metrics.render(capacity_status)
       ]
       |> Enum.join("\n")
       |> Kernel.<>("\n")
@@ -60,33 +60,33 @@ defmodule PaseoRelay.Operations do
 
   def response(_path, _config), do: {404, "text/plain", "not found\n"}
 
-  defp draining?, do: PaseoRelay.Drain.draining?()
+  defp draining?, do: RamblaRelay.Drain.draining?()
 
   defp ready?(config, capacity_status) do
     ready_without_capacity?(config) and ready_capacity?(capacity_status)
   end
 
   defp ready_without_capacity?(config),
-    do: not draining?() and PaseoRelay.Ownership.ready?(config.minimum_cluster_size)
+    do: not draining?() and RamblaRelay.Ownership.ready?(config.minimum_cluster_size)
 
   defp ready_capacity?({:available, %{admission: :open}}), do: true
   defp ready_capacity?(_unavailable_or_closed), do: false
 
-  defp capacity_status({namespace, limit}), do: PaseoRelay.Capacity.status(namespace, limit)
+  defp capacity_status({namespace, limit}), do: RamblaRelay.Capacity.status(namespace, limit)
 
   defp operation_options(config) do
     %{
       config: config,
       connection_budget: {
-        PaseoRelay.Listener,
+        RamblaRelay.Listener,
         config.acceptors * config.connections_per_acceptor
       }
     }
   end
 
   defp configured_runtime do
-    :paseo_relay
-    |> Application.get_env(:runtime, PaseoRelay.Config.defaults())
-    |> PaseoRelay.Config.normalize()
+    :rambla_relay
+    |> Application.get_env(:runtime, RamblaRelay.Config.defaults())
+    |> RamblaRelay.Config.normalize()
   end
 end

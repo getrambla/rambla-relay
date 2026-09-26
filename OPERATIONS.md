@@ -1,4 +1,4 @@
-# Operating Paseo Relay
+# Operating Rambla Relay
 
 ## The bar
 
@@ -26,7 +26,7 @@ processes.
   single key, one counter, one small map. Full-table or full-state scans are
   not, and the busiest node during a surge is the worst possible target.
 - If a question keeps coming up (sessions by role, ownership counts, orphan
-  sessions), add a gauge to `PaseoRelay.Metrics` and read it from `/metrics`
+  sessions), add a gauge to `RamblaRelay.Metrics` and read it from `/metrics`
   like everything else.
 
 ## Capacity model
@@ -41,7 +41,7 @@ limit per Machine. The soft limit is a Fly placement signal, not a relay
 failure threshold. Crossing it alone says nothing about application health;
 with automatic starts disabled, it does not start a spare. At the hard limit,
 Fly stops assigning new connections to that Machine. Existing connections
-remain open. Any increase in `paseo_relay_connection_rejections_total` is a
+remain open. Any increase in `rambla_relay_connection_rejections_total` is a
 separate application-level signal and should be treated as real user impact.
 
 Stopped Machines still participate in deployment management: a Machine lease
@@ -55,11 +55,11 @@ fleet capacity for new sessions; they cannot split one exceptionally large
 session across Machines.
 
 The relay has a second, provider-independent safety ceiling. The application
-multiplies `PASEO_RELAY_ACCEPTORS` by
-`PASEO_RELAY_CONNECTIONS_PER_ACCEPTOR`, yielding 20,000 active WebSockets per
+multiplies `RAMBLA_RELAY_ACCEPTORS` by
+`RAMBLA_RELAY_CONNECTIONS_PER_ACCEPTOR`, yielding 20,000 active WebSockets per
 node by default. Every valid local upgrade reserves one node-local slot before
 Cowboy takes over the WebSocket. At the ceiling, the upgrade receives `503`,
-`paseo_relay_connection_rejections_total` increments, and existing WebSockets
+`rambla_relay_connection_rejections_total` increments, and existing WebSockets
 remain open. Slots are released explicitly at normal termination and by process
 monitoring after abnormal death.
 
@@ -97,8 +97,8 @@ with room for the configured ingress budget and VM overhead.
   they would after a Machine exit. Ownership convergence can make one logical
   session reconnect more than once during a rollout; there is no single-reconnect
   guarantee. Drain is process-local admission state, initialized at boot with
-  `PASEO_RELAY_DRAIN` or changed inside the application through
-  `PaseoRelay.Drain`; there is no drain HTTP endpoint. Fly's deployment
+  `RAMBLA_RELAY_DRAIN` or changed inside the application through
+  `RamblaRelay.Drain`; there is no drain HTTP endpoint. Fly's deployment
   lifecycle does not activate this state, so it does not protect ownership
   during `fly deploy`.
 - **A node wedges but stays clustered — the worst failure mode.** If a node
@@ -131,7 +131,7 @@ with room for the configured ingress budget and VM overhead.
   resumes reading in time can receive the queued `1013`; a peer whose TCP
   receive path remains completely blocked can only observe transport closure
   because no WebSocket close frame can traverse that blocked path. Increasing
-  `paseo_relay_backpressured_sources` is expected during brief congestion;
+  `rambla_relay_backpressured_sources` is expected during brief congestion;
   sustained growth plus delivery timeouts or slow-consumer closes is actionable.
 - **A session Owner stops servicing its mailbox:** the absolute delivery
   deadline closes the source and forcibly retires the timed-out Owner. Syn
@@ -152,7 +152,7 @@ with room for the configured ingress budget and VM overhead.
   restarting the ledger and reopening admission; this intentionally creates a
   node-local reconnect wave rather than overlapping accounting epochs. If the
   weighted total would cross the configured ceiling, that source closes with
-  retryable `1013`; `paseo_relay_ingress_reserved_bytes` never exceeds the
+  retryable `1013`; `rambla_relay_ingress_reserved_bytes` never exceeds the
   ceiling.
 
   Known remote owners are rerouted without consuming local capacity. For local
@@ -332,8 +332,8 @@ configuration is enabled. Custom series are local to a Machine and receive Fly
 labels such as app, region, host, and instance. Do not add `serverId` or
 `connectionId` as labels; their cardinality is unbounded.
 
-`paseo_relay_handshake_accepted_total` and
-`paseo_relay_handshake_rejected_total` expose the protocol validation with only
+`rambla_relay_handshake_accepted_total` and
+`rambla_relay_handshake_rejected_total` expose the protocol validation with only
 the fixed `routing_version` (`v1`/`v2`) and `type`
 (`hello`/`e2ee_hello`) labels. They count matching client frames accepted or
 rejected by the validation; they never contain route identifiers or key
@@ -346,13 +346,13 @@ families rather than fabricating zeros or serially blocking once per gauge.
 
 Start with dashboards and alerts for:
 
-- `paseo_relay_ready == 0` or `paseo_relay_draining == 1`;
+- `rambla_relay_ready == 0` or `rambla_relay_draining == 1`;
 - active WebSockets approaching the deployment's configured soft limit;
 - allocated file descriptors above 70% of the Machine limit;
 - sustained high memory, CPU, scheduler pressure, or network throughput;
 - Machine exits, OOM kills, and unhealthy checks;
 - unexpected spikes in reroutes or WebSocket reconnects;
-- any increase in `paseo_relay_connection_rejections_total`.
+- any increase in `rambla_relay_connection_rejections_total`.
 
 Fly's managed Grafana provides dashboards, but alert delivery needs a separate
 Grafana/Alertmanager setup. The next metrics needed for incident diagnosis are

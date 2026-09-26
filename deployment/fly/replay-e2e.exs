@@ -1,4 +1,4 @@
-defmodule PaseoRelay.FlyReplayE2E do
+defmodule RamblaRelay.FlyReplayE2E do
   import Bitwise
 
   @timeout 10_000

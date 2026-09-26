@@ -1,4 +1,4 @@
-defmodule PaseoRelay.Connection do
+defmodule RamblaRelay.Connection do
   @max_route_id_bytes 256
 
   @enforce_keys [:server_id, :role, :version, :connection_id]

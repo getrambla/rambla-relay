@@ -1,4 +1,4 @@
-defmodule PaseoRelay.Reroute do
+defmodule RamblaRelay.Reroute do
   @moduledoc false
 
   def headers({:reroute, target}, header) when is_binary(target) and is_binary(header),

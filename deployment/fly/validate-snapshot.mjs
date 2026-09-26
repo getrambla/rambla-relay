@@ -37,7 +37,7 @@ const check = (name, expected, actual, valid) => {
 check("schema", "1", snapshot.schema, snapshot.schema === 1);
 check("machine_id", '"ci-machine"', snapshot.machine_id, snapshot.machine_id === "ci-machine");
 check("private_ip", '"::1"', snapshot.private_ip, snapshot.private_ip === "::1");
-check("release_node", '"paseo_relay@::1"', snapshot.release_node, snapshot.release_node === "paseo_relay@::1");
+check("release_node", '"rambla_relay@::1"', snapshot.release_node, snapshot.release_node === "rambla_relay@::1");
 check("release_os_pid", "decimal OS pid", snapshot.release_os_pid, /^\d+$/.test(snapshot.release_os_pid));
 check("owners.ci-unowned", '"unowned"', snapshot.owners?.["ci-unowned"], snapshot.owners?.["ci-unowned"] === "unowned");
 check("connection_ceiling", "20000", snapshot.connection_ceiling, snapshot.connection_ceiling === 20000);

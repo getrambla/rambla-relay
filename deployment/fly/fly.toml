@@ -7,9 +7,9 @@ kill_timeout = "30s"
   dockerfile = "Dockerfile"
 
 [env]
-  PASEO_RELAY_HOST = "0.0.0.0"
-  PASEO_RELAY_PORT = "4000"
-  PASEO_RELAY_MIN_CLUSTER_SIZE = "2"
+  RAMBLA_RELAY_HOST = "0.0.0.0"
+  RAMBLA_RELAY_PORT = "4000"
+  RAMBLA_RELAY_MIN_CLUSTER_SIZE = "2"
 
 [http_service]
   internal_port = 4000

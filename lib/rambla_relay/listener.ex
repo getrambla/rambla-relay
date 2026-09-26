@@ -1,9 +1,9 @@
-defmodule PaseoRelay.Listener do
+defmodule RamblaRelay.Listener do
   @moduledoc false
 
   def child_spec(options) do
     reference = Keyword.fetch!(options, :ref)
-    config = options |> Keyword.fetch!(:config) |> PaseoRelay.Config.normalize()
+    config = options |> Keyword.fetch!(:config) |> RamblaRelay.Config.normalize()
 
     reference
     |> :ranch.child_spec(
@@ -68,8 +68,8 @@ defmodule PaseoRelay.Listener do
       :cowboy_router.compile([
         {:_,
          [
-           {"/ws", PaseoRelay.Socket, socket_options},
-           {:_, PaseoRelay.Operations,
+           {"/ws", RamblaRelay.Socket, socket_options},
+           {:_, RamblaRelay.Operations,
             %{config: config, connection_budget: socket_options.connection_budget}}
          ]}
       ])

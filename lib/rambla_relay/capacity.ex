@@ -1,4 +1,4 @@
-defmodule PaseoRelay.Capacity do
+defmodule RamblaRelay.Capacity do
   @moduledoc false
 
   use GenServer
@@ -375,7 +375,7 @@ defmodule PaseoRelay.Capacity do
 
       {message, messages} ->
         if observe_wait? and message.status == :delivering do
-          PaseoRelay.Metrics.observe_delivery_wait(System.monotonic_time() - message.started)
+          RamblaRelay.Metrics.observe_delivery_wait(System.monotonic_time() - message.started)
         end
 
         state = %{
@@ -455,7 +455,7 @@ defmodule PaseoRelay.Capacity do
   end
 
   defp pressure_batch(nil, memory, _recovery, watermark) do
-    maximum_message = PaseoRelay.Protocol.maximum_message_payload_bytes()
+    maximum_message = RamblaRelay.Protocol.maximum_message_payload_bytes()
 
     memory
     |> Kernel.-(watermark)
@@ -488,7 +488,7 @@ defmodule PaseoRelay.Capacity do
   defp recovery_threshold(0), do: 0
 
   defp recovery_threshold(watermark) do
-    max(watermark - PaseoRelay.Protocol.maximum_message_payload_bytes(), 0)
+    max(watermark - RamblaRelay.Protocol.maximum_message_payload_bytes(), 0)
   end
 
   defp shed_candidates(state, 0, victims), do: {state, victims}
@@ -497,7 +497,7 @@ defmodule PaseoRelay.Capacity do
     case next_candidate(state) do
       {:ok, socket, state} ->
         send(socket, :relay_memory_pressure)
-        PaseoRelay.Metrics.inc(:memory_pressure_disconnects)
+        RamblaRelay.Metrics.inc(:memory_pressure_disconnects)
         shed_candidates(state, remaining - 1, victims + 1)
 
       :empty ->
