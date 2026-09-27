@@ -1,8 +1,8 @@
-# Paseo Relay
+# Rambla Relay
 
-A distributed, protocol-compatible relay for [Paseo](https://github.com/getpaseo/paseo).
+A distributed, protocol-compatible relay for [Rambla](https://github.com/getrambla/rambla).
 
-Paseo Relay keeps its public WebSocket protocol independent from its deployment platform. Nodes use OTP only for discovery and route ownership. A deployment adapter reroutes WebSocket upgrades to the owning node, so frames stay inside one BEAM node.
+Rambla Relay keeps its public WebSocket protocol independent from its deployment platform. Nodes use OTP only for discovery and route ownership. A deployment adapter reroutes WebSocket upgrades to the owning node, so frames stay inside one BEAM node.
 
 This project is under active development and its internal protocols may change without notice.
 
@@ -39,26 +39,26 @@ generic:
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `PASEO_RELAY_HOST` | `127.0.0.1` | Public listener IP. |
-| `PASEO_RELAY_PORT` | `4000` | Public HTTP/WebSocket listener. |
-| `PASEO_RELAY_DRAIN` | `false` | Start not-ready while existing sessions drain. |
-| `PASEO_RELAY_OWNERSHIP_TARGET` | `local` | Opaque target advertised to other relay nodes. |
-| `PASEO_RELAY_REROUTE_HEADER` | `x-reroute-target` | Response header used by the deployment adapter. |
-| `PASEO_RELAY_CLUSTER_QUERY` | unset | Optional DNS query used to discover BEAM peers. |
-| `PASEO_RELAY_MIN_CLUSTER_SIZE` | `1` | Minimum nodes required before accepting unowned sessions. |
-| `PASEO_RELAY_ACCEPTORS` | `100` | Listener acceptor processes. |
-| `PASEO_RELAY_CONNECTIONS_PER_ACCEPTOR` | `200` | Capacity factor multiplied by the acceptor count to set the node-local active-WebSocket ceiling; the default is 20,000. |
-| `PASEO_RELAY_HTTP_IDLE_TIMEOUT_MS` | `15000` | Maximum idle time for pre-upgrade HTTP parsing and unread request bodies. Upgraded WebSockets remain exempt. |
-| `PASEO_RELAY_CAPACITY_MUTATION_TIMEOUT_MS` | `5000` | Maximum wait for a state-changing Capacity decision before the exact ledger epoch is invalidated. This default is provisional; certify the selected value with the staging epoch gate before rollout. |
-| `PASEO_RELAY_INGRESS_BUDGET_BYTES` | `536870912` | Node-wide weighted ceiling for complete WebSocket messages admitted to relay delivery. Must admit one maximum message at the configured weight. |
-| `PASEO_RELAY_INGRESS_WEIGHT` | `4` | Conservative memory weight charged per wire payload byte. |
-| `PASEO_RELAY_DELIVERY_TIMEOUT_MS` | `30000` | Maximum Writer reservation/write-barrier wait before a slow destination is shed. |
-| `PASEO_RELAY_TRANSPORT_SEND_TIMEOUT_MS` | `35000` | TCP send timeout. Must be greater than the Writer deadline so application shedding is recorded before the transport's final fallback. |
-| `PASEO_RELAY_CONTROL_QUEUE_BYTES` | `1048576` | Per-destination bound for queued control notifications. |
-| `PASEO_RELAY_DATA_ATTACH_TIMEOUT_MS` | `15000` | Maximum time a v2 client frame waits for its daemon-data socket. |
-| `PASEO_RELAY_TCP_RECEIVE_BUFFER_BYTES` | `65536` | Per-socket TCP receive buffer. |
-| `PASEO_RELAY_WEBSOCKET_MAX_HEAP_WORDS` | `33554432` | Per-WebSocket BEAM heap fuse, including shared binaries. Values below this protocol-safe floor are rejected. |
-| `PASEO_RELAY_MEMORY_WATERMARK_BYTES` | `0` | Optional BEAM total-memory watermark that pauses admission and sheds WebSockets with `1013` until measured memory reaches the recovery threshold; disabled generically because the safe threshold depends on the deployment memory limit. |
+| `RAMBLA_RELAY_HOST` | `127.0.0.1` | Public listener IP. |
+| `RAMBLA_RELAY_PORT` | `4000` | Public HTTP/WebSocket listener. |
+| `RAMBLA_RELAY_DRAIN` | `false` | Start not-ready while existing sessions drain. |
+| `RAMBLA_RELAY_OWNERSHIP_TARGET` | `local` | Opaque target advertised to other relay nodes. |
+| `RAMBLA_RELAY_REROUTE_HEADER` | `x-reroute-target` | Response header used by the deployment adapter. |
+| `RAMBLA_RELAY_CLUSTER_QUERY` | unset | Optional DNS query used to discover BEAM peers. |
+| `RAMBLA_RELAY_MIN_CLUSTER_SIZE` | `1` | Minimum nodes required before accepting unowned sessions. |
+| `RAMBLA_RELAY_ACCEPTORS` | `100` | Listener acceptor processes. |
+| `RAMBLA_RELAY_CONNECTIONS_PER_ACCEPTOR` | `200` | Capacity factor multiplied by the acceptor count to set the node-local active-WebSocket ceiling; the default is 20,000. |
+| `RAMBLA_RELAY_HTTP_IDLE_TIMEOUT_MS` | `15000` | Maximum idle time for pre-upgrade HTTP parsing and unread request bodies. Upgraded WebSockets remain exempt. |
+| `RAMBLA_RELAY_CAPACITY_MUTATION_TIMEOUT_MS` | `5000` | Maximum wait for a state-changing Capacity decision before the exact ledger epoch is invalidated. This default is provisional; certify the selected value with the staging epoch gate before rollout. |
+| `RAMBLA_RELAY_INGRESS_BUDGET_BYTES` | `536870912` | Node-wide weighted ceiling for complete WebSocket messages admitted to relay delivery. Must admit one maximum message at the configured weight. |
+| `RAMBLA_RELAY_INGRESS_WEIGHT` | `4` | Conservative memory weight charged per wire payload byte. |
+| `RAMBLA_RELAY_DELIVERY_TIMEOUT_MS` | `30000` | Maximum Writer reservation/write-barrier wait before a slow destination is shed. |
+| `RAMBLA_RELAY_TRANSPORT_SEND_TIMEOUT_MS` | `35000` | TCP send timeout. Must be greater than the Writer deadline so application shedding is recorded before the transport's final fallback. |
+| `RAMBLA_RELAY_CONTROL_QUEUE_BYTES` | `1048576` | Per-destination bound for queued control notifications. |
+| `RAMBLA_RELAY_DATA_ATTACH_TIMEOUT_MS` | `15000` | Maximum time a v2 client frame waits for its daemon-data socket. |
+| `RAMBLA_RELAY_TCP_RECEIVE_BUFFER_BYTES` | `65536` | Per-socket TCP receive buffer. |
+| `RAMBLA_RELAY_WEBSOCKET_MAX_HEAP_WORDS` | `33554432` | Per-WebSocket BEAM heap fuse, including shared binaries. Values below this protocol-safe floor are rejected. |
+| `RAMBLA_RELAY_MEMORY_WATERMARK_BYTES` | `0` | Optional BEAM total-memory watermark that pauses admission and sheds WebSockets with `1013` until measured memory reaches the recovery threshold; disabled generically because the safe threshold depends on the deployment memory limit. |
 | `RELEASE_NODE` / `RELEASE_COOKIE` | unset | Standard distributed-release identity. |
 
 `GET /health` is a liveness probe. `GET /ready` returns `200` only while the
@@ -125,7 +125,7 @@ See [`OPERATIONS.md`](OPERATIONS.md) for the production failure model,
 capacity policy, and alerting signals.
 
 Build a production release with `MIX_ENV=prod asdf exec mix release`, or build
-the generic container with `docker build -t paseo-relay .`. The explicit
+the generic container with `docker build -t rambla-relay .`. The explicit
 provider adapter in [`deployment/fly`](deployment/fly) translates its platform
 node input into `RELEASE_NODE`; nothing under `lib/` or `scripts/` depends on it.
 
@@ -169,10 +169,10 @@ the fixed 23,001-WebSocket command, operator inputs, and numeric pass criteria.
 The target shard establishes its sockets without publishing, then starts its
 data/control publisher only after Capacity suspension acknowledges; the two
 unaffected shards publish continuously.
-The documented contract uses `PASEO_FLY_EXPECTED_CONNECTION_CEILING`, requires
+The documented contract uses `RAMBLA_FLY_EXPECTED_CONNECTION_CEILING`, requires
 all old target sockets to drain, and then runs a full same-`serverId`
 replacement shard inside the configured timeout tolerance. That destructive
-staging-only gate requires a persistent `PASEO_FLY_ARTIFACT_DIR` and has not
+staging-only gate requires a persistent `RAMBLA_FLY_ARTIFACT_DIR` and has not
 been run for this change. Its short `summary.json` indexes retained raw traffic,
 diagnostic, ownership, timing, cleanup, and memory-peak evidence rather than
 copying those producer schemas.
@@ -181,8 +181,8 @@ Distributed ownership and reroute decisions are exercised with real local BEAM
 peer nodes in the test suite:
 
 ```sh
-mix test test/paseo_relay/router_integration_test.exs test/paseo_relay_test.exs
-PASEO_OWNERSHIP_SURGE_COUNT=50000 mix test test/paseo_relay_test.exs
+mix test test/rambla_relay/router_integration_test.exs test/rambla_relay_test.exs
+RAMBLA_OWNERSHIP_SURGE_COUNT=50000 mix test test/rambla_relay_test.exs
 ```
 
 A multi-node data test must run behind a deployment adapter capable of replaying
@@ -223,5 +223,5 @@ A disposable load-generator image is available without any deployment-provider
 assumptions:
 
 ```sh
-docker build -f deployment/load/Dockerfile -t paseo-relay-load .
+docker build -f deployment/load/Dockerfile -t rambla-relay-load .
 ```
