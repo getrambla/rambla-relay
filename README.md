@@ -65,7 +65,7 @@ generic:
 node accepts new work, and returns `503 {"status":"unready"}` while draining
 or below the configured cluster floor, when the node-local Capacity ledger does
 not answer its one-second status observation, during a memory-pressure episode,
-or while the application WebSocket ceiling is full. Fly's soft limit and
+or while the application WebSocket ceiling is full. Platform soft limits and
 temporary ingress-byte occupancy do not make the application unready. `GET
 /metrics` is Prometheus text and exposes readiness, draining, active WebSockets,
 active sessions, reroutes, connection rejections, delivery pressure and latency,
@@ -125,9 +125,16 @@ See [`OPERATIONS.md`](OPERATIONS.md) for the production failure model,
 capacity policy, and alerting signals.
 
 Build a production release with `MIX_ENV=prod asdf exec mix release`, or build
-the generic container with `docker build -t rambla-relay .`. The explicit
-provider adapter in [`deployment/fly`](deployment/fly) translates its platform
-node input into `RELEASE_NODE`; nothing under `lib/` or `scripts/` depends on it.
+the generic container with `docker build -t rambla-relay .`. Deployment-provider
+adapters live under [`deployment/`](deployment) and translate their platform
+node input into `RELEASE_NODE`; nothing under `lib/` or `scripts/` depends on
+them.
+
+<!-- RAMBLA-FORK: fix: 2026-09-27-fix-remove-fly.md: single adapter pointer replaces the Fly narrative. -->
+
+This repository's one inherited adapter is documented, with its
+deployment policy and operations cookbook, in
+[deployment/fly/README.md](deployment/fly/README.md).
 
 Cluster ownership uses [Syn](https://hexdocs.pm/syn/readme.html), an eventually
 consistent distributed process registry. A network partition can temporarily
@@ -161,21 +168,11 @@ traffic, 25 pairs across two reconnect waves, and 200 distinct ownership
 claims. That catches protocol, concurrency, cleanup, and reconnect regressions;
 it is not evidence for the current roughly 23,000-WebSocket production fleet.
 
+<!-- RAMBLA-FORK: fix: 2026-09-27-fix-remove-fly.md: load-test scope kept provider-neutral, Fly procedure lives only in the adapter docs. -->
+
 The generic load client deliberately has no provider fault or certification
-mode. Fly's short manual procedure starts three ordinary sustained-load
-processes through exact-Machine proxies and owns only Fly-specific fault and
-cleanup commands. See [deployment/fly/README.md](deployment/fly/README.md) for
-the fixed 23,001-WebSocket command, operator inputs, and numeric pass criteria.
-The target shard establishes its sockets without publishing, then starts its
-data/control publisher only after Capacity suspension acknowledges; the two
-unaffected shards publish continuously.
-The documented contract uses `RAMBLA_FLY_EXPECTED_CONNECTION_CEILING`, requires
-all old target sockets to drain, and then runs a full same-`serverId`
-replacement shard inside the configured timeout tolerance. That destructive
-staging-only gate requires a persistent `RAMBLA_FLY_ARTIFACT_DIR` and has not
-been run for this change. Its short `summary.json` indexes retained raw traffic,
-diagnostic, ownership, timing, cleanup, and memory-peak evidence rather than
-copying those producer schemas.
+mode; provider-specific procedures of that kind live only in deployment
+adapters, reached through the adapter pointer above.
 
 Distributed ownership and reroute decisions are exercised with real local BEAM
 peer nodes in the test suite:
@@ -186,7 +183,7 @@ RAMBLA_OWNERSHIP_SURGE_COUNT=50000 mix test test/rambla_relay_test.exs
 ```
 
 A multi-node data test must run behind a deployment adapter capable of replaying
-the original WebSocket upgrade. The Fly adapter uses `fly-replay`; all load
+the original WebSocket upgrade; all load
 clients still use one public endpoint and the proxy performs node placement.
 
 Capacity tests need an appropriate file-descriptor limit and kernel socket

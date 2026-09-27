@@ -299,6 +299,26 @@ The template's soft limit does not start capacity because autostart is disabled.
 If additional capacity is needed, start a pre-provisioned Machine explicitly and
 wait for its forced `/ready` check to pass.
 
+<!-- RAMBLA-FORK: fix: 2026-09-27-fix-remove-fly.md: absorbs the Fly operational items from OPERATIONS.md and README.md so their removal loses no guidance. -->
+
+Hard-limit semantics: crossing the soft limit alone says nothing about
+application health — it is a placement signal and never starts a spare. At
+the hard limit, Fly stops assigning new connections to that Machine while
+existing connections remain open. An increase in
+`rambla_relay_connection_rejections_total` is a separate application-level
+signal and should be treated as real user impact. Ingress failures also
+differ from application failures: when Fly Proxy loses the path to a locally
+healthy Machine, platform-directed requests time out even though loopback
+HTTP, Owner routing, CPU, and memory remain healthy — start and verify the
+stopped spare in the same region, restart the affected Machine once, and if
+the failure returns after that restart, replace the Machine on a fresh Fly
+host instead of restarting it again. A recurring Fly ingress failure calls
+for replacement on a fresh host; recurring relay pressure calls for an
+application fix. Do not repeatedly restart the same Machine: repeated
+restarts only create repeated user-visible blips. A stopped Machine that
+must remain unavailable to Fly Replay should also be cordoned; stopping and
+disabling autostart are not routing fences.
+
 ```sh
 fly machine uncordon SPARE_MACHINE_ID -a "$APP"
 fly machine start SPARE_MACHINE_ID -a "$APP"

@@ -31,28 +31,24 @@ processes.
 
 ## Capacity model
 
+<!-- RAMBLA-FORK: fix: 2026-09-27-fix-remove-fly.md: rewrites the capacity model in provider-neutral language. -->
 The relay does not assume a particular production topology. An operator may
-run one Machine, several regional Machines, or provision stopped spares. The
-Fly template disables automatic Machine starts so capacity changes remain an
-explicit operator action. Fly never creates Machines automatically.
+run one node, several regional nodes, or provision stopped spares. Capacity
+changes remain an explicit operator action; the deployment must be configured
+so the platform never creates capacity automatically.
 
-The template sets a 10,000-connection soft limit and a 15,000-connection hard
-limit per Machine. The soft limit is a Fly placement signal, not a relay
-failure threshold. Crossing it alone says nothing about application health;
-with automatic starts disabled, it does not start a spare. At the hard limit,
-Fly stops assigning new connections to that Machine. Existing connections
-remain open. Any increase in `rambla_relay_connection_rejections_total` is a
-separate application-level signal and should be treated as real user impact.
-
-Stopped Machines still participate in deployment management: a Machine lease
-or state transition can block `fly deploy` even though it is not serving
-traffic. A stopped Machine that must remain unavailable to Fly Replay should
-also be cordoned; stopping and disabling autostart are not routing fences.
+The deployment sets a soft and a hard connection limit per node. The soft
+limit is a platform placement signal, not a relay failure threshold. Crossing
+it alone says nothing about application health, and it does not start a
+spare. At the hard limit, the platform stops assigning new connections to
+that node. Existing connections remain open. Any increase in
+`rambla_relay_connection_rejections_total` is a separate application-level
+signal and should be treated as real user impact.
 
 Relay sessions are intentionally not rebalanced. A `serverId` is owned by one
-BEAM node so its frames never cross nodes. Additional Machines increase total
+BEAM node so its frames never cross nodes. Additional nodes increase total
 fleet capacity for new sessions; they cannot split one exceptionally large
-session across Machines.
+session across nodes.
 
 The relay has a second, provider-independent safety ceiling. The application
 multiplies `RAMBLA_RELAY_ACCEPTORS` by
@@ -76,49 +72,52 @@ The native-Cowboy capacity run held 15,000 distinct real WebSockets with zero
 failures and measured 1,300,512,768 bytes peak relay RSS on the test host. That
 is the measured real-socket envelope; the generic 20,000-slot ceiling is a
 final admission fuse, not evidence that 20,000 sockets fit every 2 GB runtime.
-Provider limits and machine sizing must stay inside a locally measured envelope
+Provider limits and node sizing must stay inside a locally measured envelope
 with room for the configured ingress budget and VM overhead.
 
 ## Failure behavior
 
-- **Relay process or Machine exits:** WebSockets on that owner disconnect. OTP
+- **Relay process or node exits:** WebSockets on that owner disconnect. OTP
   removes the dead owner, clients reconnect, and a surviving node can claim the
   session. There is no transparent connection migration.
-- **One region is unavailable:** Fly routes reconnects to a healthy region. The
-  extra round trip is temporary; the replacement owner is then stable.
+- **One region is unavailable:** the platform routes reconnects to a healthy
+  region. The extra round trip is temporary; the replacement owner is then
+  stable.
 - **A node crosses the soft limit:** this is capacity information, not an
   incident. Existing sessions remain on their owners. If the deployment has
-  automatic starts enabled, Fly may start an existing stopped Machine; the
-  repository's Fly template keeps automatic starts disabled.
-- **A node reaches the hard limit:** Fly stops sending it new connections.
-  Existing connections remain open. A client pinned to that owner may fail to
-  reconnect until capacity is available on the owner or the owner disappears.
+  automatic starts enabled, the platform may start an existing stopped node;
+  this repository's deployment is configured to keep automatic starts
+  disabled.
+- **A node reaches the hard limit:** the platform stops sending it new
+  connections. Existing connections remain open. A client pinned to that
+  owner may fail to reconnect until capacity is available on the owner or the
+  owner disappears.
 - **A rolling deployment replaces an owner:** its WebSockets reconnect just as
-  they would after a Machine exit. Ownership convergence can make one logical
+  they would after a node exit. Ownership convergence can make one logical
   session reconnect more than once during a rollout; there is no single-reconnect
   guarantee. Drain is process-local admission state, initialized at boot with
   `RAMBLA_RELAY_DRAIN` or changed inside the application through
-  `RamblaRelay.Drain`; there is no drain HTTP endpoint. Fly's deployment
-  lifecycle does not activate this state, so it does not protect ownership
-  during `fly deploy`.
+  `RamblaRelay.Drain`; there is no drain HTTP endpoint. The platform's
+  deployment lifecycle does not activate this state, so it does not protect
+  ownership during a deploy.
 - **A node wedges but stays clustered — the worst failure mode.** If a node
   stops answering HTTP (health check critical, `/metrics` unresponsive) while
   its BEAM stays connected to the cluster, Syn keeps its ownership
   registrations alive: reconnecting daemons are rerouted into the wedged node
   and cannot re-home elsewhere. Every session it owned is held hostage until
-  the node dies. Remedy: restart the Machine promptly — the restart drops the
+  the node dies. Remedy: restart the node promptly — the restart drops the
   node from the cluster, purges its registrations, and stranded sessions
   re-claim on healthy nodes within seconds. Do not wait for a wedged node to
   recover on its own, and do not diagnose it with anything heavier than its
   logs. Planned follow-up: an in-VM watchdog that self-terminates the node
   when its own readiness or Owner call latency degrades, so this recovery
   does not require an operator.
-- **Fly Proxy loses the path to a locally healthy Machine:** forced-instance
+- **The platform loses the path to a locally healthy node:** platform-directed
   requests time out even though loopback HTTP, Owner routing, CPU, and memory
-  remain healthy. New clients cannot reach sessions owned by that Machine.
+  remain healthy. New clients cannot reach sessions owned by that node.
   Start and verify the stopped spare in the same region before disturbing the
-  affected Machine, then restart the affected Machine once. If the failure
-  returns after a restart, replace the Machine on a fresh Fly host instead of
+  affected node, then restart the affected node once. If the failure
+  returns after a restart, replace the node on a fresh host instead of
   repeatedly restarting it. This is a platform ingress failure, not relay
   pressure, and changing relay size will not repair it.
 - **A destination stops reading:** its Writer permits only one payload write.
@@ -172,22 +171,22 @@ with room for the configured ingress budget and VM overhead.
   listener and every socket from the failed epoch before replacement Capacity
   can admit traffic. This deliberately turns an authority stall at that bound
   into a node-local reconnect wave so that no externally failed mutation
-  survives in a later accounting epoch. The generic default and Fly template
-  currently select 5,000 ms, provisionally; the combined staging epoch gate must
-  certify that value for the intended topology and Machine size before rollout.
+  survives in a later accounting epoch. The generic default currently selects
+  5,000 ms, provisionally; the combined staging epoch gate must
+  certify that value for the intended topology and node size before rollout.
 
-  The Fly-only manual gate distributes exactly 23,001 real WebSockets across
-  three exact Machines: 7,667 per Machine, below both deployed application
-  ceilings and Fly placement limits. It is a short POSIX procedure around three
+  The staging gate distributes exactly 23,001 real WebSockets across
+  three exact nodes: 7,667 per node, below the deployed application
+  ceilings. It is a short POSIX procedure around three
   ordinary `relay-load.mjs` sustained runs. The target shard establishes all
   sockets but holds its publisher while the unaffected shards run normally.
   Immediately after `:sys.suspend/1` acknowledges, the procedure signals the
   target publisher to start. Every pair then sends a frame containing
   1,024 padding bytes plus timestamp, direction, and sequence metadata in both
   directions once per second, while each control socket sends a valid ping,
-  including throughout the target Machine's Capacity stall. The procedure reads
+  including throughout the target node's Capacity stall. The procedure reads
   the deployed ceiling and mutation timeout
-  from each release, resets each Machine's cgroup-v2 `memory.peak`, and records
+  from each release, resets each node's cgroup-v2 `memory.peak`, and records
   the exact target Capacity PID. The fault reports the VM monotonic timestamp
   immediately after `:sys.suspend/1` acknowledges. The deliberately started
   public message traffic then causes the configured timeout to invalidate that
@@ -198,7 +197,7 @@ with room for the configured ingress budget and VM overhead.
 
   EXIT, SIGINT, and SIGTERM cleanup always asks the target release to kill the
   captured PID only if it is still the registered Capacity, then stops load
-  processes, waits the Owner grace interval, and requires every exact-Machine
+  processes, waits the Owner grace interval, and requires every exact-node
   proxy to be ready with zero Capacity gauges. Every release must report all
   three staged server IDs unowned, and each final `memory.peak` must remain under
   the operator-supplied ceiling. Unaffected shard JSON permits zero connection
@@ -206,7 +205,7 @@ with room for the configured ingress budget and VM overhead.
   7,667 old target sockets must report an abnormal epoch disconnect. A second
   full 7,667-socket sustained run then reuses the same target `serverId` through
   the replacement listener and requires zero connection, send, ordering,
-  cleanup, or frame-loss failures. The exact credentials, three-Machine
+  cleanup, or frame-loss failures. The exact credentials, three-node
   topology, timeout, replacement tolerance, application connection ceiling,
   memory ceiling, and free local ports are operator inputs. The gate has not
   been run.
@@ -242,8 +241,8 @@ with room for the configured ingress budget and VM overhead.
   gauges through a read-only one-second call. It fits inside the production
   readiness probe's two-second deadline and never kills Capacity.
   `/ready` returns `503` when Capacity is unavailable, memory pressure is active,
-  or the application WebSocket ceiling is full. The Fly soft limit and temporary
-  occupancy of the ingress byte budget are not readiness conditions. `/metrics`
+  or the application WebSocket ceiling is full. The platform soft limit and
+  temporary occupancy of the ingress byte budget are not readiness conditions. `/metrics`
   performs the same single observation per render; when Capacity is unavailable
   it reports ready zero, retains independent counters, sessions, histograms, and
   BEAM metrics, and omits the four unknown Capacity gauges. Actual Capacity
@@ -270,8 +269,8 @@ with room for the configured ingress budget and VM overhead.
   BEAM memory relief. Admission
   resumes only below a one-maximum-message hysteresis threshold. The generic
   watermark is disabled because the safe threshold depends on the runtime
-  limit; a strict generic deployment must set a nonzero threshold. The 2 GB Fly
-  template enables it at 1.5 GB.
+  limit; a strict deployment must set a nonzero threshold sized to its memory
+  limit.
 - **A client sends an invalid X25519 handshake key:** after ingress admission,
   the relay checks every JSON `hello` and `e2ee_hello` frame on both routing
   versions, regardless of text or binary opcode. Malformed Base64, invalid
@@ -306,31 +305,32 @@ with room for the configured ingress budget and VM overhead.
 Protect connected users before restoring the preferred topology.
 
 - Confirm a failure with two independent signals or repeated probes. An OOM,
-  Machine exit, failed health check, or unreachable forced-instance endpoint is
+  node exit, failed health check, or unreachable platform-directed endpoint is
   already a concrete signal; CPU steal alone is not.
-- Never restart more than one Machine at a time. Never restart the whole
-  cluster. Existing sockets on the restarted Machine will disconnect.
-- Before restarting an unhealthy Machine, start a stopped spare in its region
-  when one is available and wait for `/ready` to pass. Do not stop any Machine
+- Never restart more than one node at a time. Never restart the whole
+  cluster. Existing sockets on the restarted node will disconnect.
+- Before restarting an unhealthy node, start a stopped spare in its region
+  when one is available and wait for `/ready` to pass. Do not stop any node
   that has acquired sessions during an incident merely to restore the preferred
   topology.
-- Restart a Machine when it is wedged or unreachable, not merely busy. Afterward,
-  verify the Machine's forced-instance readiness, cluster readiness, Owner
+- Restart a node when it is wedged or unreachable, not merely busy. Afterward,
+  verify the node's platform-directed readiness, cluster readiness, Owner
   responsiveness, and reconnect/session convergence before taking another
   action.
-- Do not repeatedly restart the same Machine. A recurring Fly ingress failure
+- Do not repeatedly restart the same node. A recurring platform ingress failure
   calls for replacement on a fresh host; recurring relay pressure calls for an
   application fix. Repeated restarts only create repeated user-visible blips.
-- During unattended monitoring, do not deploy, resize, destroy Machines, change
+- During unattended monitoring, do not deploy, resize, destroy nodes, change
   configuration, or run load tests. Record every intervention, its evidence,
   and the post-action verification.
 
 ## Metrics
 
-Fly scrapes `/metrics` every 15 seconds when the deployment adapter's metrics
-configuration is enabled. Custom series are local to a Machine and receive Fly
-labels such as app, region, host, and instance. Do not add `serverId` or
-`connectionId` as labels; their cardinality is unbounded.
+The platform scrapes `/metrics` on the deployment's configured cadence when
+the deployment adapter's metrics configuration is enabled. Custom series are
+local to a node and receive platform labels such as app, region, host, and
+instance. Do not add `serverId` or `connectionId` as labels; their
+cardinality is unbounded.
 
 `rambla_relay_handshake_accepted_total` and
 `rambla_relay_handshake_rejected_total` expose the protocol validation with only
@@ -348,13 +348,13 @@ Start with dashboards and alerts for:
 
 - `rambla_relay_ready == 0` or `rambla_relay_draining == 1`;
 - active WebSockets approaching the deployment's configured soft limit;
-- allocated file descriptors above 70% of the Machine limit;
+- allocated file descriptors above 70% of the node limit;
 - sustained high memory, CPU, scheduler pressure, or network throughput;
-- Machine exits, OOM kills, and unhealthy checks;
+- node exits, OOM kills, and unhealthy checks;
 - unexpected spikes in reroutes or WebSocket reconnects;
 - any increase in `rambla_relay_connection_rejections_total`.
 
-Fly's managed Grafana provides dashboards, but alert delivery needs a separate
+Dashboards are the operator's choice, but alert delivery needs a deliberate
 Grafana/Alertmanager setup. The next metrics needed for incident diagnosis are
 low-cardinality counters for rejected upgrades, close reasons, ownership
 takeovers, and cluster peer count.
