@@ -24,3 +24,7 @@ rambla_relay-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# Throwaway worktrees from just trial-merge / bootstrap-rebrand.
+/.trial-merge/
+/.rebrand-bootstrap/
