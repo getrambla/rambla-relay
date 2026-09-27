@@ -24,10 +24,13 @@ nodes, and never stack production actions.
 | [TDD.md](TDD.md) | Red/green evidence log for every behavior — the test methodology record |
 | [deployment/fly/README.md](deployment/fly/README.md) | The Fly.io adapter: bootstrap, manual deployment policy, and a generic health-check/incident cookbook |
 
-For a Fly health check, read `OPERATIONS.md` first and then follow the cookbook
-in `deployment/fly/README.md`. Health checks are read-only: do not deploy,
-restart, resize, cordon, or stop a Machine unless the user explicitly asks for
-an intervention after the failure is confirmed.
+<!-- RAMBLA-FORK: fix: 2026-09-27-fix-remove-fly.md: no-Fly rule replaces the Fly narrative; this file is the authority overriding Fly language elsewhere. -->
+
+**This fork does not deploy on Fly, and Fly must not be used for any
+deployment work here.** The Fly adapter is upstream's, absorbed by the
+rebrand, kept only as an inherited artifact under `deployment/fly/`. This
+file is the authority: it overrides any Fly-sounding language anywhere else
+in the repo, including verbatim upstream docs.
 
 ## Development
 
