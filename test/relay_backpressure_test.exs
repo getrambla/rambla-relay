@@ -456,7 +456,8 @@ defmodule RamblaRelay.BackpressureTest do
 
     on_exit(fn -> resume_process(control_process) end)
 
-    assert :ok = RamblaRelay.Delivery.Writer.control(writer, ~s({"type":"connected","id":"first"}))
+    assert :ok =
+             RamblaRelay.Delivery.Writer.control(writer, ~s({"type":"connected","id":"first"}))
 
     assert :ok =
              RamblaRelay.Delivery.Writer.control(writer, ~s({"type":"connected","id":"second"}))
