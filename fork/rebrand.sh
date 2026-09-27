@@ -23,7 +23,7 @@ sub() {
 # merge time by pairing a deleted path against an added one, so renaming on main holds
 # only while nothing occupies the old path. The day main writes its own CHANGELOG.md
 # there is nothing left to pair and upstream's edits merge into the fork's file.
-for old in CHANGELOG.md README*.md; do
+for old in CHANGELOG.md; do
 	[ -e "$old" ] || continue
 	git mv "$old" "PASEO-$old"
 done
