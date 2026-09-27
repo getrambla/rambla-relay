@@ -1,5 +1,8 @@
-# Install the pinned Elixir/Erlang toolchain (via mise, per .tool-versions) and
-# the Mix dependencies, reproducibly.
+# List all recipes
+@list:
+    just --list
+
+# Install pinned Elixir/Erlang toolchain (via mise, per .tool-versions) and Mix dependencies
 [script]
 setup:
     set -euo pipefail
@@ -15,12 +18,6 @@ setup:
     mix deps.get
 
 # Run the test suite with the pinned toolchain.
-#
-# The load and backpressure tests open hundreds of sockets; the default shell
-# soft limit (often 1024) exhausts fds mid-suite and two tests fail with
-# :emfile. Upstream never hits this on GitHub runners (their hard limit is
-# high enough) and only raises nofile for its own Docker containers
-# (scripts/ci.sh --ulimit nofile=100000). Raise it here the same way.
 [script]
 test:
     set -euo pipefail
@@ -28,6 +25,20 @@ test:
     current=$(ulimit -Sn)
     [ "$current" -ge 100000 ] || ulimit -Sn 100000
     mix test
+
+# Print the provenance at HEAD
+[script]
+provenance:
+    # 1. main — what the plan is written against
+    git log -1 --format='- main: %h — %cs' main
+
+    # 2. upstream-rebrand — the rebrand commit main last took
+    r=$(git merge-base main upstream-rebrand)
+    git log -1 --format='- upstream-rebrand: %h — %cs' "$r"
+
+    # 3. upstream/main — the upstream commit that rebrand was made from
+    u=$(git merge-base upstream-rebrand upstream/main)
+    git log -1 --format='- upstream/main: %h — %cs' "$u"
 
 # Merge the rebranded upstream into a dated branch, commit the merge, verify it, and fast-forward main; --release is upstream's newest stable tag (what CI runs), --main expedites current main. Never merge upstream/main directly. CI runs fork/merge-upstream.sh directly and commits to main itself.
 [script]
