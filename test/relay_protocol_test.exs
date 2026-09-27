@@ -162,7 +162,11 @@ defmodule RamblaRelay.RelayProtocolTest do
     budget_namespace = {:owner_moved, System.unique_integer([:positive])}
 
     {:ok, connection} =
-      RamblaRelay.Connection.from_query(%{"serverId" => server_id, "role" => "server", "v" => "2"})
+      RamblaRelay.Connection.from_query(%{
+        "serverId" => server_id,
+        "role" => "server",
+        "v" => "2"
+      })
 
     {:local, owner, reservation} = RamblaRelay.Ownership.route(server_id, "local")
     owner_down = Process.monitor(owner)
