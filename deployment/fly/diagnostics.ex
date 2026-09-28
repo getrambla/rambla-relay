@@ -1,16 +1,16 @@
-defmodule PaseoRelay.FlyDiagnostics do
+defmodule RamblaRelay.FlyDiagnostics do
   @moduledoc false
 
-  @scope :paseo_relay_owners
+  @scope :rambla_relay_owners
 
   def snapshot(server_ids) when is_list(server_ids) do
     config =
-      :paseo_relay
-      |> Application.get_env(:runtime, PaseoRelay.Config.defaults())
-      |> PaseoRelay.Config.normalize()
+      :rambla_relay
+      |> Application.get_env(:runtime, RamblaRelay.Config.defaults())
+      |> RamblaRelay.Config.normalize()
 
     Map.merge(identity(), %{
-      capacity_pid: inspect(Process.whereis(PaseoRelay.Capacity)),
+      capacity_pid: inspect(Process.whereis(RamblaRelay.Capacity)),
       connection_ceiling: config.acceptors * config.connections_per_acceptor,
       capacity_mutation_timeout_ms: config.capacity_mutation_timeout_ms,
       monotonic_ms: System.monotonic_time(:millisecond),
@@ -39,7 +39,7 @@ defmodule PaseoRelay.FlyDiagnostics do
 
   def kill_capacity(expected_pid) do
     status =
-      case Process.whereis(PaseoRelay.Capacity) do
+      case Process.whereis(RamblaRelay.Capacity) do
         capacity when is_pid(capacity) ->
           if inspect(capacity) == expected_pid do
             Process.exit(capacity, :kill)
@@ -63,7 +63,7 @@ defmodule PaseoRelay.FlyDiagnostics do
   end
 
   defp exact_capacity!(expected_pid) do
-    case Process.whereis(PaseoRelay.Capacity) do
+    case Process.whereis(RamblaRelay.Capacity) do
       pid when is_pid(pid) ->
         if inspect(pid) == expected_pid, do: pid, else: raise("Capacity epoch changed")
 

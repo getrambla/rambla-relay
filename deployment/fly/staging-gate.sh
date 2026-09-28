@@ -17,18 +17,18 @@ Usage: set the required environment, then run:
 
 Required:
   FLY_API_TOKEN
-  PASEO_FLY_ARTIFACT_DIR             persistent, operator-owned output directory
-  PASEO_FLY_CONFIRM_STAGING_ONLY=yes
-  PASEO_FLY_APP
-  PASEO_FLY_MACHINES                 three comma-separated Machine IDs
-  PASEO_FLY_TARGET_MACHINE           one ID from PASEO_FLY_MACHINES
-  PASEO_FLY_EXPECTED_TIMEOUT_MS
-  PASEO_FLY_EXPECTED_CONNECTION_CEILING
-  PASEO_FLY_MAX_PEAK_BYTES
-  PASEO_FLY_PORT_BASE                three consecutive free local ports
+  RAMBLA_FLY_ARTIFACT_DIR             persistent, operator-owned output directory
+  RAMBLA_FLY_CONFIRM_STAGING_ONLY=yes
+  RAMBLA_FLY_APP
+  RAMBLA_FLY_MACHINES                 three comma-separated Machine IDs
+  RAMBLA_FLY_TARGET_MACHINE           one ID from RAMBLA_FLY_MACHINES
+  RAMBLA_FLY_EXPECTED_TIMEOUT_MS
+  RAMBLA_FLY_EXPECTED_CONNECTION_CEILING
+  RAMBLA_FLY_MAX_PEAK_BYTES
+  RAMBLA_FLY_PORT_BASE                three consecutive free local ports
 
 Optional:
-  PASEO_FLY_REPLACEMENT_TOLERANCE_MS (default: 1000; range: 1..5000)
+  RAMBLA_FLY_REPLACEMENT_TOLERANCE_MS (default: 1000; range: 1..5000)
 
 Non-destructive contract checks:
   sh deployment/fly/staging-gate.sh --validate-config
@@ -42,13 +42,13 @@ EOF
 
 [ "${1:-}" = "--help" ] && { usage; exit 0; }
 
-ARTIFACT_INPUT=${PASEO_FLY_ARTIFACT_DIR:-}
+ARTIFACT_INPUT=${RAMBLA_FLY_ARTIFACT_DIR:-}
 if [ -z "$ARTIFACT_INPUT" ]; then
-  printf '%s\n' '{"schema":1,"status":"failed","staging_only":true,"failed_checks":[{"check":"config.PASEO_FLY_ARTIFACT_DIR","expected":"set","actual":null,"reason":"persistent operator artifact directory is required"}],"artifacts":{}}'
+  printf '%s\n' '{"schema":1,"status":"failed","staging_only":true,"failed_checks":[{"check":"config.RAMBLA_FLY_ARTIFACT_DIR","expected":"set","actual":null,"reason":"persistent operator artifact directory is required"}],"artifacts":{}}'
   exit 2
 fi
 mkdir -p "$ARTIFACT_INPUT" 2>/dev/null || {
-  printf '%s\n' '{"schema":1,"status":"failed","staging_only":true,"failed_checks":[{"check":"config.PASEO_FLY_ARTIFACT_DIR","expected":"creatable directory","actual":null,"reason":"artifact directory could not be created"}],"artifacts":{}}'
+  printf '%s\n' '{"schema":1,"status":"failed","staging_only":true,"failed_checks":[{"check":"config.RAMBLA_FLY_ARTIFACT_DIR","expected":"creatable directory","actual":null,"reason":"artifact directory could not be created"}],"artifacts":{}}'
   exit 2
 }
 ARTIFACT_DIR=$(cd "$ARTIFACT_INPUT" && pwd -P) || exit 2
@@ -150,11 +150,11 @@ json_line() { awk '/^\{/{line=$0} END{print line}'; }
 
 rpc() {
   machine=$1; ip=$2; expression=$3
-  command="RELEASE_NODE=paseo_relay@$ip RELEASE_DISTRIBUTION=name ERL_AFLAGS='-proto_dist inet6_tcp' /app/bin/paseo_relay rpc '$expression'"
+  command="RELEASE_NODE=rambla_relay@$ip RELEASE_DISTRIBUTION=name ERL_AFLAGS='-proto_dist inet6_tcp' /app/bin/rambla_relay rpc '$expression'"
   bounded 20 fly ssh console --app "$APP" --machine "$machine" --pty=false --command "$command"
 }
 
-snapshot() { rpc "$1" "$2" "PaseoRelay.FlyDiagnostics.print_snapshot(\"$ids_encoded\")" | json_line; }
+snapshot() { rpc "$1" "$2" "RamblaRelay.FlyDiagnostics.print_snapshot(\"$ids_encoded\")" | json_line; }
 
 wait_ready() {
   attempts=0
@@ -167,7 +167,7 @@ wait_ready() {
 
 metric() {
   curl --max-time 2 --fail --silent "http://127.0.0.1:$1/metrics" \
-    | awk -v n="$2" '$1 == "paseo_relay_" n {print $2}'
+    | awk -v n="$2" '$1 == "rambla_relay_" n {print $2}'
 }
 
 remote_peak() {
@@ -237,7 +237,7 @@ cleanup() {
   [ "$incoming" -eq 0 ] || exit_status=1
 
   if [ -n "$captured_pid" ] && [ -n "$target_ip" ]; then
-    if rpc "$TARGET" "$target_ip" "PaseoRelay.FlyDiagnostics.kill_capacity(\"$captured_pid\")" \
+    if rpc "$TARGET" "$target_ip" "RamblaRelay.FlyDiagnostics.kill_capacity(\"$captured_pid\")" \
       >"$ARTIFACT_DIR/capacity-recovery.json" 2>"$ephemeral/recovery.stderr.raw"; then
       json_line <"$ARTIFACT_DIR/capacity-recovery.json" | jq -e \
         '.status == "killed" or .status == "already_replaced"' >/dev/null 2>&1 ||
@@ -296,26 +296,26 @@ required() {
   [ -n "$1" ] || { record_failure "config.$2" "" "" '"set"' null "$2 is required"; exit 2; }
 }
 required "${FLY_API_TOKEN:-}" FLY_API_TOKEN
-required "${PASEO_FLY_CONFIRM_STAGING_ONLY:-}" PASEO_FLY_CONFIRM_STAGING_ONLY
-required "${PASEO_FLY_APP:-}" PASEO_FLY_APP
-required "${PASEO_FLY_MACHINES:-}" PASEO_FLY_MACHINES
-required "${PASEO_FLY_TARGET_MACHINE:-}" PASEO_FLY_TARGET_MACHINE
-required "${PASEO_FLY_EXPECTED_TIMEOUT_MS:-}" PASEO_FLY_EXPECTED_TIMEOUT_MS
-required "${PASEO_FLY_EXPECTED_CONNECTION_CEILING:-}" PASEO_FLY_EXPECTED_CONNECTION_CEILING
-required "${PASEO_FLY_MAX_PEAK_BYTES:-}" PASEO_FLY_MAX_PEAK_BYTES
-required "${PASEO_FLY_PORT_BASE:-}" PASEO_FLY_PORT_BASE
+required "${RAMBLA_FLY_CONFIRM_STAGING_ONLY:-}" RAMBLA_FLY_CONFIRM_STAGING_ONLY
+required "${RAMBLA_FLY_APP:-}" RAMBLA_FLY_APP
+required "${RAMBLA_FLY_MACHINES:-}" RAMBLA_FLY_MACHINES
+required "${RAMBLA_FLY_TARGET_MACHINE:-}" RAMBLA_FLY_TARGET_MACHINE
+required "${RAMBLA_FLY_EXPECTED_TIMEOUT_MS:-}" RAMBLA_FLY_EXPECTED_TIMEOUT_MS
+required "${RAMBLA_FLY_EXPECTED_CONNECTION_CEILING:-}" RAMBLA_FLY_EXPECTED_CONNECTION_CEILING
+required "${RAMBLA_FLY_MAX_PEAK_BYTES:-}" RAMBLA_FLY_MAX_PEAK_BYTES
+required "${RAMBLA_FLY_PORT_BASE:-}" RAMBLA_FLY_PORT_BASE
 
-APP=$PASEO_FLY_APP
-TARGET=$PASEO_FLY_TARGET_MACHINE
-EXPECTED_TIMEOUT=$PASEO_FLY_EXPECTED_TIMEOUT_MS
-EXPECTED_CONNECTION_CEILING=$PASEO_FLY_EXPECTED_CONNECTION_CEILING
-REPLACEMENT_TOLERANCE=${PASEO_FLY_REPLACEMENT_TOLERANCE_MS:-$DEFAULT_REPLACEMENT_TOLERANCE_MS}
-MAX_PEAK=$PASEO_FLY_MAX_PEAK_BYTES
-PORT1=$PASEO_FLY_PORT_BASE
+APP=$RAMBLA_FLY_APP
+TARGET=$RAMBLA_FLY_TARGET_MACHINE
+EXPECTED_TIMEOUT=$RAMBLA_FLY_EXPECTED_TIMEOUT_MS
+EXPECTED_CONNECTION_CEILING=$RAMBLA_FLY_EXPECTED_CONNECTION_CEILING
+REPLACEMENT_TOLERANCE=${RAMBLA_FLY_REPLACEMENT_TOLERANCE_MS:-$DEFAULT_REPLACEMENT_TOLERANCE_MS}
+MAX_PEAK=$RAMBLA_FLY_MAX_PEAK_BYTES
+PORT1=$RAMBLA_FLY_PORT_BASE
 
-[ "$PASEO_FLY_CONFIRM_STAGING_ONLY" = yes ] || {
+[ "$RAMBLA_FLY_CONFIRM_STAGING_ONLY" = yes ] || {
   record_failure config.staging_confirmation "" "" '"yes"' '"invalid"' \
-    "PASEO_FLY_CONFIRM_STAGING_ONLY must be yes"
+    "RAMBLA_FLY_CONFIRM_STAGING_ONLY must be yes"
   exit 2
 }
 case "$EXPECTED_TIMEOUT,$EXPECTED_CONNECTION_CEILING,$REPLACEMENT_TOLERANCE,$MAX_PEAK,$PORT1" in
@@ -332,7 +332,7 @@ esac
 PORT2=$((PORT1 + 1)); PORT3=$((PORT1 + 2))
 
 IFS=, read -r M1 M2 M3 M4 <<EOF
-$PASEO_FLY_MACHINES
+$RAMBLA_FLY_MACHINES
 EOF
 [ -n "$M1" ] && [ -n "$M2" ] && [ -n "$M3" ] && [ -z "$M4" ] || {
   record_failure config.machine_count "" "" 3 '"invalid"' "exactly three Machine IDs are required"
@@ -387,7 +387,7 @@ validate_replacement_window() {
 validate_snapshot() {
   printf '%s' "$1" | jq -e --arg machine "$2" --arg ip "$3" --argjson timeout "$EXPECTED_TIMEOUT" \
     --argjson ceiling "$EXPECTED_CONNECTION_CEILING" '.schema==1 and .machine_id==$machine and
-      .private_ip==$ip and .release_node==("paseo_relay@"+$ip) and
+      .private_ip==$ip and .release_node==("rambla_relay@"+$ip) and
       .capacity_mutation_timeout_ms==$timeout and .connection_ceiling==$ceiling and
       (.capacity_pid|test("^#PID<[0-9]+\\.[0-9]+\\.[0-9]+>$"))' >/dev/null
 }
@@ -416,7 +416,7 @@ for command_name in fly jq node curl perl; do
   }
 done
 
-ephemeral=$(mktemp -d "${TMPDIR:-/tmp}/paseo-fly-gate.XXXXXX") || {
+ephemeral=$(mktemp -d "${TMPDIR:-/tmp}/rambla-fly-gate.XXXXXX") || {
   record_failure run.temporary_directory "" "" '"created"' '"failed"' "ephemeral directory failed"
   exit 1
 }
@@ -497,7 +497,7 @@ while [ "$(metric "$target_port" ingress_reserved_bytes 2>/dev/null || echo miss
 done
 target_snapshot=$(snapshot "$TARGET" "$target_ip")
 captured_pid=$(printf '%s' "$target_snapshot" | jq -er .capacity_pid)
-suspended=$(rpc "$TARGET" "$target_ip" "PaseoRelay.FlyDiagnostics.suspend_capacity(\"$captured_pid\")" | json_line)
+suspended=$(rpc "$TARGET" "$target_ip" "RamblaRelay.FlyDiagnostics.suspend_capacity(\"$captured_pid\")" | json_line)
 printf '%s\n' "$suspended" >"$ARTIFACT_DIR/suspension.json"
 ack_ms=$(printf '%s' "$suspended" | jq -er --arg machine "$TARGET" --arg pid "$captured_pid" \
   'select(.event=="capacity_suspended" and .machine_id==$machine and .capacity_pid==$pid)|.acknowledged_monotonic_ms')

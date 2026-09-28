@@ -1,4 +1,4 @@
-defmodule PaseoRelay.FlyStagingGateTest do
+defmodule RamblaRelay.FlyStagingGateTest do
   use ExUnit.Case, async: true
 
   @script "deployment/fly/staging-gate.sh"
@@ -53,7 +53,7 @@ defmodule PaseoRelay.FlyStagingGateTest do
       schema: 1,
       machine_id: "machineA",
       private_ip: "127.0.0.1",
-      release_node: "paseo_relay@127.0.0.1",
+      release_node: "rambla_relay@127.0.0.1",
       capacity_mutation_timeout_ms: 5_000,
       connection_ceiling: 20_000,
       capacity_pid: "#PID<0.986.0>"
@@ -121,16 +121,16 @@ defmodule PaseoRelay.FlyStagingGateTest do
   defp gate_env(dir, port, extra_env) do
     [
       {"FLY_API_TOKEN", "test-only"},
-      {"PASEO_FLY_ARTIFACT_DIR", dir},
-      {"PASEO_FLY_CONFIRM_STAGING_ONLY", "yes"},
-      {"PASEO_FLY_APP", "paseo-relay-staging"},
-      {"PASEO_FLY_MACHINES", "machineA,machineB,machineC"},
-      {"PASEO_FLY_TARGET_MACHINE", "machineA"},
-      {"PASEO_FLY_EXPECTED_TIMEOUT_MS", "5000"},
-      {"PASEO_FLY_EXPECTED_CONNECTION_CEILING", "20000"},
-      {"PASEO_FLY_REPLACEMENT_TOLERANCE_MS", "750"},
-      {"PASEO_FLY_MAX_PEAK_BYTES", "1800000000"},
-      {"PASEO_FLY_PORT_BASE", port}
+      {"RAMBLA_FLY_ARTIFACT_DIR", dir},
+      {"RAMBLA_FLY_CONFIRM_STAGING_ONLY", "yes"},
+      {"RAMBLA_FLY_APP", "rambla-relay-staging"},
+      {"RAMBLA_FLY_MACHINES", "machineA,machineB,machineC"},
+      {"RAMBLA_FLY_TARGET_MACHINE", "machineA"},
+      {"RAMBLA_FLY_EXPECTED_TIMEOUT_MS", "5000"},
+      {"RAMBLA_FLY_EXPECTED_CONNECTION_CEILING", "20000"},
+      {"RAMBLA_FLY_REPLACEMENT_TOLERANCE_MS", "750"},
+      {"RAMBLA_FLY_MAX_PEAK_BYTES", "1800000000"},
+      {"RAMBLA_FLY_PORT_BASE", port}
     ] ++ extra_env
   end
 end

@@ -1,7 +1,7 @@
-defmodule PaseoRelay.FlyReplayE2ETest do
+defmodule RamblaRelay.FlyReplayE2ETest do
   use ExUnit.Case, async: false
 
-  @runner "Code.require_file(\"deployment/fly/replay-e2e.exs\"); PaseoRelay.FlyReplayE2E.run(System.argv())"
+  @runner "Code.require_file(\"deployment/fly/replay-e2e.exs\"); RamblaRelay.FlyReplayE2E.run(System.argv())"
 
   @tag timeout: 60_000
   test "independent replay probes use distinct ids and leave no active sockets" do
@@ -10,7 +10,7 @@ defmodule PaseoRelay.FlyReplayE2ETest do
     results =
       Enum.map(1..3, fn _ ->
         result = run_probe(port)
-        assert PaseoRelay.Metrics.value(:active_websockets) == 0
+        assert RamblaRelay.Metrics.value(:active_websockets) == 0
         result
       end)
 
@@ -67,16 +67,16 @@ defmodule PaseoRelay.FlyReplayE2ETest do
     reference = {:fly_replay_e2e, System.unique_integer([:positive])}
 
     start_supervised!(
-      {PaseoRelay.Listener,
+      {RamblaRelay.Listener,
        ref: reference,
-       config: PaseoRelay.Config.defaults(),
+       config: RamblaRelay.Config.defaults(),
        ip: {127, 0, 0, 1},
        port: 0,
        acceptors: 4,
        max_connections: 1_000}
     )
 
-    PaseoRelay.Listener.port(reference)
+    RamblaRelay.Listener.port(reference)
   end
 
   defp available_port do

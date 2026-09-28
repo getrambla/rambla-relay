@@ -2,8 +2,8 @@
 
 set -uo pipefail
 
-app="${1:-paseo-relay-next}"
-endpoint="${2:-wss://relay.paseo.sh}"
+app="${1:-rambla-relay-next}"
+endpoint="${2:-wss://relay.rambla.sh}"
 passed=0
 failed=0
 
@@ -19,7 +19,7 @@ discovered=$(printf '%s\n' "$inventory" | awk 'NF {count++} END {print count + 0
 
 while IFS=$'\t' read -r machine_id machine_name region; do
   if output=$(MIX_ENV=test mix run --no-start \
-    -e 'Code.require_file("deployment/fly/replay-e2e.exs"); PaseoRelay.FlyReplayE2E.run(System.argv())' -- \
+    -e 'Code.require_file("deployment/fly/replay-e2e.exs"); RamblaRelay.FlyReplayE2E.run(System.argv())' -- \
     --endpoint "$endpoint" \
     --owner "$machine_id" \
     --landing "$machine_id" </dev/null 2>&1); then

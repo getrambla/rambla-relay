@@ -1,8 +1,8 @@
-defmodule PaseoRelay.RelayProtocolTest do
+defmodule RamblaRelay.RelayProtocolTest do
   use ExUnit.Case, async: false
 
   setup do
-    assert PaseoRelay.Metrics.value(:active_websockets) == 0
+    assert RamblaRelay.Metrics.value(:active_websockets) == 0
     :ok
   end
 
@@ -78,14 +78,14 @@ defmodule PaseoRelay.RelayProtocolTest do
     {:ok, control} = connect(v2_url(port, "server"))
     assert_receive {:relay_open, ^control}
     assert_control(control, %{"type" => "sync", "connectionIds" => []})
-    frames = PaseoRelay.Metrics.value(:frames_forwarded)
-    bytes = PaseoRelay.Metrics.value(:bytes_forwarded)
+    frames = RamblaRelay.Metrics.value(:frames_forwarded)
+    bytes = RamblaRelay.Metrics.value(:bytes_forwarded)
 
     :ok = WebSockex.send_frame(control, {:text, ~s({"type":"ping"})})
 
     pong = assert_control_type(control, "pong")
-    assert PaseoRelay.Metrics.value(:frames_forwarded) == frames + 1
-    assert PaseoRelay.Metrics.value(:bytes_forwarded) == bytes + byte_size(pong)
+    assert RamblaRelay.Metrics.value(:frames_forwarded) == frames + 1
+    assert RamblaRelay.Metrics.value(:bytes_forwarded) == bytes + byte_size(pong)
 
     close_clients([control])
   end
@@ -97,7 +97,7 @@ defmodule PaseoRelay.RelayProtocolTest do
     {:ok, control} = connect(v2_url(port, "server"))
     assert_receive {:relay_open, ^control}
     assert_control(control, %{"type" => "sync", "connectionIds" => []})
-    owner = PaseoRelay.Ownership.owner_pid(v2_server_id(port))
+    owner = RamblaRelay.Ownership.owner_pid(v2_server_id(port))
     owner_ref = Process.monitor(owner)
     :ok = :sys.suspend(owner)
 
@@ -136,7 +136,7 @@ defmodule PaseoRelay.RelayProtocolTest do
     {:ok, data} = connect(v2_url(port, "server", "clt_registry_crash"))
     assert_receive {:relay_open, ^data}
 
-    assert Process.whereis(PaseoRelay.Registry) == nil
+    assert Process.whereis(RamblaRelay.Registry) == nil
 
     :ok = WebSockex.send_frame(client, {:text, "owner-routed"})
     assert_receive {:relay_frame, ^data, :text, "owner-routed"}
@@ -151,7 +151,7 @@ defmodule PaseoRelay.RelayProtocolTest do
     assert_receive {:relay_open, ^control}
     assert_control(control, %{"type" => "sync", "connectionIds" => []})
 
-    Process.exit(PaseoRelay.Ownership.owner_pid(v2_server_id(port)), :session_conflict)
+    Process.exit(RamblaRelay.Ownership.owner_pid(v2_server_id(port)), :session_conflict)
 
     assert_receive {:relay_closed, ^control, {:remote, 1012, "Session owner moved"}}, 1_000
     close_clients([control])
@@ -162,33 +162,37 @@ defmodule PaseoRelay.RelayProtocolTest do
     budget_namespace = {:owner_moved, System.unique_integer([:positive])}
 
     {:ok, connection} =
-      PaseoRelay.Connection.from_query(%{"serverId" => server_id, "role" => "server", "v" => "2"})
+      RamblaRelay.Connection.from_query(%{
+        "serverId" => server_id,
+        "role" => "server",
+        "v" => "2"
+      })
 
-    {:local, owner, reservation} = PaseoRelay.Ownership.route(server_id, "local")
+    {:local, owner, reservation} = RamblaRelay.Ownership.route(server_id, "local")
     owner_down = Process.monitor(owner)
     Process.exit(owner, :session_conflict)
     assert_receive {:DOWN, ^owner_down, :process, ^owner, :session_conflict}
 
     assert {:ok, admission} =
-             PaseoRelay.Capacity.admit_connection(
+             RamblaRelay.Capacity.admit_connection(
                budget_namespace,
                1,
-               PaseoRelay.Config.defaults().capacity_mutation_timeout_ms
+               RamblaRelay.Config.defaults().capacity_mutation_timeout_ms
              )
 
     state = %{
       admission: admission,
-      config: PaseoRelay.Config.defaults(),
+      config: RamblaRelay.Config.defaults(),
       connection: connection,
       owner: owner,
       reservation: reservation
     }
 
     assert {[{:close, 1012, "Session expired"}], failed_state} =
-             PaseoRelay.Socket.websocket_init(state)
+             RamblaRelay.Socket.websocket_init(state)
 
-    PaseoRelay.Capacity.release_connection(failed_state.admission.token)
-    assert PaseoRelay.Capacity.active_connections(budget_namespace) == 0
+    RamblaRelay.Capacity.release_connection(failed_state.admission.token)
+    assert RamblaRelay.Capacity.active_connections(budget_namespace) == 0
   end
 
   @tag timeout: 75_000
@@ -350,7 +354,7 @@ defmodule PaseoRelay.RelayProtocolTest do
   end
 
   defp await_no_active_websockets(deadline) do
-    if PaseoRelay.Metrics.value(:active_websockets) == 0 do
+    if RamblaRelay.Metrics.value(:active_websockets) == 0 do
       :ok
     else
       if System.monotonic_time(:millisecond) >= deadline do
@@ -386,9 +390,9 @@ defmodule PaseoRelay.RelayProtocolTest do
     reference = {:relay_protocol, System.unique_integer([:positive])}
 
     start_supervised!(
-      {PaseoRelay.Listener,
+      {RamblaRelay.Listener,
        ref: reference,
-       config: PaseoRelay.Config.defaults(),
+       config: RamblaRelay.Config.defaults(),
        ip: {127, 0, 0, 1},
        port: port,
        acceptors: 4,
@@ -420,6 +424,6 @@ defmodule PaseoRelay.RelayProtocolTest do
   end
 
   defp handshake_metric(outcome, version, type) do
-    PaseoRelay.Metrics.value({:handshake, outcome, version, type})
+    RamblaRelay.Metrics.value({:handshake, outcome, version, type})
   end
 end

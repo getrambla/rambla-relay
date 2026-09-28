@@ -1,4 +1,4 @@
-defmodule PaseoRelay.PartitionClient do
+defmodule RamblaRelay.PartitionClient do
   use WebSockex
 
   def start(url, observer) do

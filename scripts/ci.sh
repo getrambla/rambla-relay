@@ -41,15 +41,15 @@ if [[ "${1:-}" == "--validate-fly-build" ]]; then
   exit 0
 fi
 
-readonly release_port="${PASEO_RELAY_CI_RELEASE_PORT:-4400}"
-readonly container_port="${PASEO_RELAY_CI_CONTAINER_PORT:-4401}"
-readonly fly_port="${PASEO_RELAY_CI_FLY_PORT:-4402}"
+readonly release_port="${RAMBLA_RELAY_CI_RELEASE_PORT:-4400}"
+readonly container_port="${RAMBLA_RELAY_CI_CONTAINER_PORT:-4401}"
+readonly fly_port="${RAMBLA_RELAY_CI_FLY_PORT:-4402}"
 readonly run_id="${GITHUB_RUN_ID:-local}-$$"
-readonly generic_image="paseo-relay-ci-generic:${run_id}"
-readonly fly_image="paseo-relay-ci-fly:${run_id}"
-readonly load_image="paseo-relay-ci-load:${run_id}"
-readonly generic_container="paseo-relay-ci-generic-${run_id}"
-readonly fly_container="paseo-relay-ci-fly-${run_id}"
+readonly generic_image="rambla-relay-ci-generic:${run_id}"
+readonly fly_image="rambla-relay-ci-fly:${run_id}"
+readonly load_image="rambla-relay-ci-load:${run_id}"
+readonly generic_container="rambla-relay-ci-generic-${run_id}"
+readonly fly_container="rambla-relay-ci-fly-${run_id}"
 
 release_pid=""
 
@@ -86,7 +86,7 @@ assert_operations_contract() {
   [[ "$(curl --fail --silent --show-error "${base_url}/health")" == '{"status":"ok"}' ]]
   [[ "$(curl --fail --silent --show-error "${base_url}/ready")" == '{"status":"ready"}' ]]
   metrics="$(curl --fail --silent --show-error "${base_url}/metrics")"
-  grep --quiet '^paseo_relay_ready 1$' <<<"${metrics}"
+  grep --quiet '^rambla_relay_ready 1$' <<<"${metrics}"
 }
 
 print_bounded_rpc_output() {
@@ -106,10 +106,10 @@ mix test
 env MIX_ENV=prod mix compile --warnings-as-errors
 env MIX_ENV=prod mix release --overwrite
 
-PASEO_RELAY_HOST=127.0.0.1 \
-PASEO_RELAY_PORT="${release_port}" \
-PASEO_RELAY_MIN_CLUSTER_SIZE=1 \
-  _build/prod/rel/paseo_relay/bin/paseo_relay start &
+RAMBLA_RELAY_HOST=127.0.0.1 \
+RAMBLA_RELAY_PORT="${release_port}" \
+RAMBLA_RELAY_MIN_CLUSTER_SIZE=1 \
+  _build/prod/rel/rambla_relay/bin/rambla_relay start &
 release_pid=$!
 wait_for_endpoint "http://127.0.0.1:${release_port}/health"
 assert_operations_contract "http://127.0.0.1:${release_port}"
@@ -156,13 +156,13 @@ node scripts/relay-load.mjs \
 
 docker run --detach --name "${fly_container}" \
   --ulimit nofile=100000:100000 \
-  --env FLY_APP_NAME=paseo-relay-ci \
+  --env FLY_APP_NAME=rambla-relay-ci \
   --env FLY_MACHINE_ID=ci-machine \
   --env FLY_PRIVATE_IP=::1 \
-  --env PASEO_RELAY_HOST=0.0.0.0 \
-  --env PASEO_RELAY_PORT=4000 \
-  --env PASEO_RELAY_CLUSTER_QUERY=ignore \
-  --env PASEO_RELAY_MIN_CLUSTER_SIZE=1 \
+  --env RAMBLA_RELAY_HOST=0.0.0.0 \
+  --env RAMBLA_RELAY_PORT=4000 \
+  --env RAMBLA_RELAY_CLUSTER_QUERY=ignore \
+  --env RAMBLA_RELAY_MIN_CLUSTER_SIZE=1 \
   --publish "127.0.0.1:${fly_port}:4000" \
   "${fly_image}" >/dev/null
 if ! wait_for_endpoint "http://127.0.0.1:${fly_port}/health"; then
@@ -172,7 +172,7 @@ fi
 assert_operations_contract "http://127.0.0.1:${fly_port}"
 
 if ! fly_snapshot_output="$(docker exec "${fly_container}" sh -lc \
-  'RELEASE_NODE="paseo_relay@$FLY_PRIVATE_IP" RELEASE_DISTRIBUTION=name ERL_AFLAGS="-proto_dist inet6_tcp" ELIXIR_ERL_OPTIONS="+fnu" /app/bin/paseo_relay rpc '\''PaseoRelay.FlyDiagnostics.print_snapshot("WyJjaS11bm93bmVkIl0")'\''' 2>&1)"; then
+  'RELEASE_NODE="rambla_relay@$FLY_PRIVATE_IP" RELEASE_DISTRIBUTION=name ERL_AFLAGS="-proto_dist inet6_tcp" ELIXIR_ERL_OPTIONS="+fnu" /app/bin/rambla_relay rpc '\''RamblaRelay.FlyDiagnostics.print_snapshot("WyJjaS11bm93bmVkIl0")'\''' 2>&1)"; then
   print_bounded_rpc_output "Fly diagnostic RPC failed" "${fly_snapshot_output}"
   exit 1
 fi
@@ -183,7 +183,7 @@ if ! printf '%s\n' "${fly_snapshot_output}" | node deployment/fly/validate-snaps
 fi
 
 if ! replay_output="$(docker exec "${fly_container}" sh -lc \
-  'RELEASE_NODE="paseo_relay@$FLY_PRIVATE_IP" RELEASE_DISTRIBUTION=name ERL_AFLAGS="-proto_dist inet6_tcp" ELIXIR_ERL_OPTIONS="+fnu" /app/bin/paseo_relay rpc '\''Code.require_file("/app/diagnostics/replay-e2e.exs"); PaseoRelay.FlyReplayE2E.run(["--endpoint", "ws://127.0.0.1:4000", "--owner", "ci-machine", "--landing", "ci-machine"])'\''' 2>&1)"; then
+  'RELEASE_NODE="rambla_relay@$FLY_PRIVATE_IP" RELEASE_DISTRIBUTION=name ERL_AFLAGS="-proto_dist inet6_tcp" ELIXIR_ERL_OPTIONS="+fnu" /app/bin/rambla_relay rpc '\''Code.require_file("/app/diagnostics/replay-e2e.exs"); RamblaRelay.FlyReplayE2E.run(["--endpoint", "ws://127.0.0.1:4000", "--owner", "ci-machine", "--landing", "ci-machine"])'\''' 2>&1)"; then
   print_bounded_rpc_output "Fly replay RPC failed" "${replay_output}"
   exit 1
 fi

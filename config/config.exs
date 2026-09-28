@@ -1,8 +1,8 @@
 import Config
 
 config :syn,
-  scopes: [:paseo_relay_owners],
+  scopes: [:rambla_relay_owners],
   strict_mode: true
 
-config :paseo_relay,
+config :rambla_relay,
   runtime: []

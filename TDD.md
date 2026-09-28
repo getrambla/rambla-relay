@@ -151,7 +151,7 @@
 - Final native-Cowboy gates: `mix format --check-formatted`, forced
   `mix compile --warnings-as-errors`, `mix deps.unlock --check-unused`, and
   `git diff --check` all exited zero. `MIX_ENV=prod mix release --overwrite`
-  assembled `paseo_relay-0.1.0`; the release was not started or deployed.
+  assembled `rambla_relay-0.1.0`; the release was not started or deployed.
 - Completion gate after the all-socket pressure and externally-owned gauge
   fixes: the complete suite passed 68/68 in 99.4 seconds. Warnings-as-errors
   test and production compilation, formatting, lock validation, release build,
@@ -177,7 +177,7 @@
   one backpressured source and seven in-flight bytes. Killing the old ingress
   singleton also allowed its empty replacement to exist while old connections
   were still closing.
-- Green: `PaseoRelay.Capacity` is now the single monitored ledger for connection
+- Green: `RamblaRelay.Capacity` is now the single monitored ledger for connection
   reservations, attached sockets, explicit per-message tokens, retained bytes,
   delivery transitions, pressure order, and all four transient gauges. The
   heap-fuse boundary returns every gauge to baseline without running
@@ -342,7 +342,7 @@
 
 ### Reject invalid upgrades before ownership
 
-- Red: `mix test test/paseo_relay/router_integration_test.exs:18` sent a plain
+- Red: `mix test test/rambla_relay/router_integration_test.exs:18` sent a plain
   `GET /ws` request and reached ownership before WebSocket upgrade validation.
 - Green: the same real TCP request receives `426 Expected WebSocket upgrade`
   and `Ownership.owner_pid/1` returns `:undefined`.
@@ -411,7 +411,7 @@
 
 ## Complete malformed-handshake validation
 
-- Red: `mix test test/paseo_relay/router_integration_test.exs:28` sent
+- Red: `mix test test/rambla_relay/router_integration_test.exs:28` sent
   `Upgrade: websocket` without `Connection: Upgrade`, reached routing, and
   created an owner before the handshake failed.
 - Green: the Cowboy handler checks `is_upgrade_request/1` before
@@ -480,7 +480,7 @@
   The same reserved-owner regression returns the existing
   `1012 Session expired` close path. Lookup-to-reserve and
   reservation-to-attach use the same bounded call boundary.
-- Red: killing `PaseoRelay.Metrics` with `:kill` left the old listener-specific
+- Red: killing `RamblaRelay.Metrics` with `:kill` left the old listener-specific
   telemetry handler registered. The replacement failed with `already_exists`,
   exhausted the application supervisor, and left the relay stopped.
 - Green: the native listener has an explicit active-WebSocket admission boundary
@@ -499,7 +499,7 @@
   until every observer sees the exact expected count from every origin. It then
   resolves sampled IDs from a non-owner node and verifies their opaque reroute
   targets.
-- With `PASEO_OWNERSHIP_SURGE_COUNT=50000`, registration, full three-node count
+- With `RAMBLA_OWNERSHIP_SURGE_COUNT=50000`, registration, full three-node count
   convergence, and cross-node route sampling complete in roughly 1.5 seconds on
   the local test cluster.
 
@@ -549,7 +549,7 @@
   `asdf exec mix compile --warnings-as-errors` compiled two changed files and
   exited 0; `git diff --check` exited 0; and
   `MIX_ENV=prod asdf exec mix release --overwrite` assembled
-  `paseo_relay-0.1.0` successfully. The release was not started or deployed.
+  `rambla_relay-0.1.0` successfully. The release was not started or deployed.
 
 ## Final admission, deadline, and pressure boundaries
 
@@ -658,7 +658,7 @@
   test-used exports would require a new test-only authority.
 - Mutation-timeout configuration red/green: the defaults test first raised
   `KeyError key :capacity_mutation_timeout_ms not found`. Configuration now
-  parses `PASEO_RELAY_CAPACITY_MUTATION_TIMEOUT_MS`, defaults provisionally to
+  parses `RAMBLA_RELAY_CAPACITY_MUTATION_TIMEOUT_MS`, defaults provisionally to
   5,000 ms, accepts 7,500 ms, and rejects 99 ms with the exact validated range
   error. The value flows through the existing listener/socket config; Capacity
   does not read environment or query itself. Fly explicitly selects 5,000 ms.
@@ -775,8 +775,8 @@
   load processes, accepted as few as 7,590 of 7,667 target disconnects, and
   opened no socket on the replacement epoch. Its replacement loop allowed the
   configured timeout plus roughly fifteen seconds, and the documented
-  `PASEO_FLY_EXPECTED_CONNECTION_CEILING` did not match the script's shorter
-  `PASEO_FLY_EXPECTED_CEILING`. The failing-first executable shell-contract run
+  `RAMBLA_FLY_EXPECTED_CONNECTION_CEILING` did not match the script's shorter
+  `RAMBLA_FLY_EXPECTED_CEILING`. The failing-first executable shell-contract run
   reported 0/3 passed: canonical config validation and both in-window timing
   checks exited nonzero on the missing short-name variable, while the obsolete
   name returned status 1 instead of the required contract error status 2.
@@ -805,7 +805,7 @@
   Hosted `verify` still needs to be made required by an external GitHub branch
   rule or ruleset after the pushed check exists. No repository setting was
   changed.
-- Razor-16 deletion red: `PASEO_FLY_PORT_BASE=bad` reached shell arithmetic
+- Razor-16 deletion red: `RAMBLA_FLY_PORT_BASE=bad` reached shell arithmetic
   before validation and exited 1 with `bad: unbound variable`, zero stdout, and
   no `summary.json`. The gate kept its load results and diagnostics only in a
   temporary directory, deleted it after output, and passed a nominal 90-second
@@ -909,6 +909,6 @@
   handling, binary legacy input, pipelined frames, rejection behavior, and
   accepted/rejected metric increments.
 - Final targeted gate: `asdf exec mix test
-  test/paseo_relay/handshake_validation_test.exs test/relay_protocol_test.exs`
+  test/rambla_relay/handshake_validation_test.exs test/relay_protocol_test.exs`
   passed 20/20 in 81.4 seconds. `asdf exec mix format`, `asdf exec mix compile
   --warnings-as-errors --force`, and `git diff --check` exited zero.

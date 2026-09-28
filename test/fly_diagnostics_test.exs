@@ -1,6 +1,6 @@
 Code.require_file("../deployment/fly/diagnostics.ex", __DIR__)
 
-defmodule PaseoRelay.FlyDiagnosticsTest do
+defmodule RamblaRelay.FlyDiagnosticsTest do
   use ExUnit.Case, async: false
 
   import ExUnit.CaptureIO
@@ -15,7 +15,7 @@ defmodule PaseoRelay.FlyDiagnosticsTest do
       "schema" => 1,
       "machine_id" => "ci-machine",
       "private_ip" => "::1",
-      "release_node" => "paseo_relay@::1",
+      "release_node" => "rambla_relay@::1",
       "release_os_pid" => "4130",
       "owners" => %{"ci-unowned" => "unowned"},
       "connection_ceiling" => 20_000,
@@ -48,18 +48,18 @@ defmodule PaseoRelay.FlyDiagnosticsTest do
       restore_env("FLY_PRIVATE_IP", old_private_ip)
     end)
 
-    capacity = Process.whereis(PaseoRelay.Capacity)
+    capacity = Process.whereis(RamblaRelay.Capacity)
     capacity_ref = Process.monitor(capacity)
 
     on_exit(fn ->
-      if Process.whereis(PaseoRelay.Capacity) == capacity do
+      if Process.whereis(RamblaRelay.Capacity) == capacity do
         Process.exit(capacity, :kill)
       end
     end)
 
     suspended =
       capture_io(fn ->
-        PaseoRelay.FlyDiagnostics.suspend_capacity(inspect(capacity))
+        RamblaRelay.FlyDiagnostics.suspend_capacity(inspect(capacity))
       end)
       |> Jason.decode!()
 
@@ -81,7 +81,7 @@ defmodule PaseoRelay.FlyDiagnosticsTest do
 
     recovered =
       capture_io(fn ->
-        PaseoRelay.FlyDiagnostics.kill_capacity(inspect(capacity))
+        RamblaRelay.FlyDiagnostics.kill_capacity(inspect(capacity))
       end)
       |> Jason.decode!()
 
@@ -102,15 +102,15 @@ defmodule PaseoRelay.FlyDiagnosticsTest do
     assert_receive {:DOWN, ^capacity_ref, :process, ^capacity, :killed}, 2_000
 
     assert_eventually(fn ->
-      replacement = Process.whereis(PaseoRelay.Capacity)
+      replacement = Process.whereis(RamblaRelay.Capacity)
       is_pid(replacement) and replacement != capacity and ready?()
     end)
 
-    replacement = Process.whereis(PaseoRelay.Capacity)
+    replacement = Process.whereis(RamblaRelay.Capacity)
 
     repeated =
       capture_io(fn ->
-        PaseoRelay.FlyDiagnostics.kill_capacity(inspect(capacity))
+        RamblaRelay.FlyDiagnostics.kill_capacity(inspect(capacity))
       end)
       |> Jason.decode!()
 
@@ -119,7 +119,7 @@ defmodule PaseoRelay.FlyDiagnosticsTest do
   end
 
   defp ready? do
-    port = PaseoRelay.Listener.port(PaseoRelay.Listener)
+    port = RamblaRelay.Listener.port(RamblaRelay.Listener)
     {:ok, socket} = :gen_tcp.connect(~c"127.0.0.1", port, [:binary, active: false], 100)
     :ok = :gen_tcp.send(socket, "GET /ready HTTP/1.1\r\nHost: relay.test\r\n\r\n")
     response = :gen_tcp.recv(socket, 0, 1_500)

@@ -1,4 +1,4 @@
-defmodule PaseoRelay.Delivery.Deadline do
+defmodule RamblaRelay.Delivery.Deadline do
   @moduledoc false
 
   def after_ms(timeout_ms), do: System.monotonic_time(:millisecond) + timeout_ms

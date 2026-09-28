@@ -1,6 +1,6 @@
 # Fly deployment and operations
 
-This adapter maps Fly runtime values into Paseo Relay's generic clustering and
+This adapter maps Fly runtime values into Rambla Relay's generic clustering and
 reroute configuration. Fly-specific environment variables do not enter the
 core application. This guide deliberately makes no assumptions about a
 particular operator's hostname, regions, Machine IDs, or spare topology.
@@ -37,7 +37,7 @@ fly secrets set -a "$APP" RELEASE_COOKIE="$(openssl rand -base64 48)"
 fly deploy -a "$APP" -c deployment/fly/fly.toml \
   --ha=false \
   --primary-region "$PRIMARY_REGION" \
-  --env PASEO_RELAY_MIN_CLUSTER_SIZE=1
+  --env RAMBLA_RELAY_MIN_CLUSTER_SIZE=1
 ```
 
 Run that command from the repository root. The config selects
@@ -46,7 +46,7 @@ reroute adapter; `scripts/ci.sh` derives and validates the same target from the
 config instead of maintaining a second path.
 
 To add capacity or regions, clone a known-good Machine and choose the desired
-region. Set `PASEO_RELAY_MIN_CLUSTER_SIZE` to the minimum number of clustered
+region. Set `RAMBLA_RELAY_MIN_CLUSTER_SIZE` to the minimum number of clustered
 nodes required before a node reports ready.
 
 ```sh
@@ -65,14 +65,14 @@ WebSocket protocol:
 
 ```sh
 MIX_ENV=test mix run -e \
-  'Code.require_file("deployment/fly/replay-e2e.exs"); PaseoRelay.FlyReplayE2E.run(System.argv())' -- \
+  'Code.require_file("deployment/fly/replay-e2e.exs"); RamblaRelay.FlyReplayE2E.run(System.argv())' -- \
   --endpoint "$RELAY_URL" \
   --owner OWNER_MACHINE_ID \
   --landing LANDING_MACHINE_ID
 ```
 
 The entrypoint raises the per-process file descriptor limit to 100,000 by
-default. Override `PASEO_RELAY_NOFILE` when a deployment needs a different
+default. Override `RAMBLA_RELAY_NOFILE` when a deployment needs a different
 ceiling. The sample VM size and connection limits in `fly.toml` are starting
 points, not universal capacity claims; validate them against the deployment's
 traffic and memory profile. The generic template leaves the BEAM memory
@@ -85,16 +85,16 @@ three-Machine staging app of the intended size:
 ```sh
 ulimit -n 100000
 export FLY_API_TOKEN=...
-export PASEO_FLY_ARTIFACT_DIR="$PWD/staging-evidence/$(date +%Y%m%d-%H%M%S)"
-export PASEO_FLY_CONFIRM_STAGING_ONLY=yes
-export PASEO_FLY_APP=paseo-relay-staging
-export PASEO_FLY_MACHINES=MACHINE_A,MACHINE_B,MACHINE_C
-export PASEO_FLY_TARGET_MACHINE=MACHINE_A
-export PASEO_FLY_EXPECTED_TIMEOUT_MS=5000
-export PASEO_FLY_EXPECTED_CONNECTION_CEILING=20000
-export PASEO_FLY_REPLACEMENT_TOLERANCE_MS=1000
-export PASEO_FLY_MAX_PEAK_BYTES=1800000000
-export PASEO_FLY_PORT_BASE=41000
+export RAMBLA_FLY_ARTIFACT_DIR="$PWD/staging-evidence/$(date +%Y%m%d-%H%M%S)"
+export RAMBLA_FLY_CONFIRM_STAGING_ONLY=yes
+export RAMBLA_FLY_APP=rambla-relay-staging
+export RAMBLA_FLY_MACHINES=MACHINE_A,MACHINE_B,MACHINE_C
+export RAMBLA_FLY_TARGET_MACHINE=MACHINE_A
+export RAMBLA_FLY_EXPECTED_TIMEOUT_MS=5000
+export RAMBLA_FLY_EXPECTED_CONNECTION_CEILING=20000
+export RAMBLA_FLY_REPLACEMENT_TOLERANCE_MS=1000
+export RAMBLA_FLY_MAX_PEAK_BYTES=1800000000
+export RAMBLA_FLY_PORT_BASE=41000
 sh deployment/fly/staging-gate.sh
 ```
 
@@ -120,7 +120,7 @@ the handler is installed before socket setup and target publishing begins only
 after acknowledgement, that acknowledgement is the lower-bound clock origin
 for the real Capacity mutation timeout. The first replacement observation must
 be no earlier than the deployed timeout and no later than that timeout plus
-`PASEO_FLY_REPLACEMENT_TOLERANCE_MS`, which defaults to 1,000 ms and must be
+`RAMBLA_FLY_REPLACEMENT_TOLERANCE_MS`, which defaults to 1,000 ms and must be
 between 1 and 5,000 ms. The retained `timing.json` records the
 acknowledged-suspension and replacement-observation VM monotonic timestamps,
 their difference, and the post-acknowledgement publisher signal. All
@@ -172,7 +172,7 @@ predicate can be checked independently with
 commands execute the same validation used by the destructive run.
 
 CI separately builds and boots the exact Fly image, invokes the small diagnostic
-snapshot through `/app/bin/paseo_relay rpc`, and invokes the packaged
+snapshot through `/app/bin/rambla_relay rpc`, and invokes the packaged
 `replay-e2e.exs` through the same release boundary. Replay is only a two-frame
 public Fly image smoke; it is not ownership convergence or fleet certification.
 Actual cgroup reset permission and the 23,001-socket gate remain staging-only
@@ -227,7 +227,7 @@ curl --http1.1 -fsS \
 curl --http1.1 -fsS \
   -H "Fly-Force-Instance-Id: $MACHINE_ID" \
   "$RELAY_URL/metrics" \
-  | grep -E '^paseo_relay_(ready|draining|active_websockets|active_sessions|reroute_responses_total|connection_rejections_total|backpressured_sources|ingress_reserved_bytes|inflight_delivery_bytes|delivery_timeouts_total|slow_consumer_disconnects_total|beam_total_memory_bytes|beam_binary_memory_bytes) '
+  | grep -E '^rambla_relay_(ready|draining|active_websockets|active_sessions|reroute_responses_total|connection_rejections_total|backpressured_sources|ingress_reserved_bytes|inflight_delivery_bytes|delivery_timeouts_total|slow_consumer_disconnects_total|beam_total_memory_bytes|beam_binary_memory_bytes) '
 ```
 
 Repeat for every started Machine. Record the values by region and Machine ID;
@@ -237,8 +237,8 @@ Interpret the important series as follows:
 
 | Signal | Meaning |
 | --- | --- |
-| `paseo_relay_ready 1` | The node admits relay work |
-| `paseo_relay_draining 1` | The node intentionally refuses new ownership |
+| `rambla_relay_ready 1` | The node admits relay work |
+| `rambla_relay_draining 1` | The node intentionally refuses new ownership |
 | `active_websockets` / `active_sessions` | Current application load, not failure by itself |
 | configured Fly soft limit crossed | Placement/capacity signal only |
 | configured Fly hard limit reached | Fly will not assign new connections to that Machine |

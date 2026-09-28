@@ -1,7 +1,7 @@
-defmodule PaseoRelay.HandshakeValidationTest do
+defmodule RamblaRelay.HandshakeValidationTest do
   use ExUnit.Case, async: true
 
-  alias PaseoRelay.HandshakeValidation
+  alias RamblaRelay.HandshakeValidation
 
   @other_unsupported_key_encodings [
     "0100000000000000000000000000000000000000000000000000000000000000",
@@ -80,14 +80,14 @@ defmodule PaseoRelay.HandshakeValidationTest do
   end
 
   test "renders fixed-cardinality handshake counters without route identifiers" do
-    metrics = PaseoRelay.Metrics.render(:unavailable)
+    metrics = RamblaRelay.Metrics.render(:unavailable)
 
-    assert metrics =~ "# TYPE paseo_relay_handshake_accepted_total counter"
-    assert metrics =~ "# TYPE paseo_relay_handshake_rejected_total counter"
+    assert metrics =~ "# TYPE rambla_relay_handshake_accepted_total counter"
+    assert metrics =~ "# TYPE rambla_relay_handshake_rejected_total counter"
 
     for outcome <- [:accepted, :rejected], version <- [1, 2], type <- [:hello, :e2ee_hello] do
       assert metrics =~
-               ~s(paseo_relay_handshake_#{outcome}_total{routing_version="v#{version}",type="#{type}"})
+               ~s(rambla_relay_handshake_#{outcome}_total{routing_version="v#{version}",type="#{type}"})
     end
 
     refute metrics =~ "serverId"
