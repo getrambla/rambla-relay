@@ -379,6 +379,11 @@ reporting`, not `Added a toggle for the enabling of notifications`).
 - Upstream already fixed this a different way (say in plain English what
   they did and how it differs).
 - The change needs an identifier rename that upstream also names.
+- **Git identity is the user's, always.** Never run
+  `git config` (user.email, user.name, or anything else), even for a
+  temporary clone or worktree. Git is already configured globally and
+  inherits everywhere. If identity is ever missing, that is a stop-and-ask,
+  not a default to pick.
 - **Anything else this skill doesn't clearly cover.** Ask rather than pick.
 
 ## The scope is the plan's scope
