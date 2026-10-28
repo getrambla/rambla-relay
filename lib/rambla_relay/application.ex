@@ -10,6 +10,7 @@ defmodule RamblaRelay.Application do
 
     children = [
       {DNSCluster, query: config.cluster_query || :ignore},
+      {RamblaRelay.StaticCluster, nodes: config.cluster_nodes},
       {RamblaRelay.Drain, config.drain},
       RamblaRelay.Metrics,
       {RamblaRelay.RuntimeSupervisor, config}
