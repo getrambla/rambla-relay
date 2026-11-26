@@ -178,7 +178,7 @@ defmodule RamblaRelay.RelayProtocolTest do
 
     state = %{
       admission: admission,
-      config: RamblaRelay.Config.defaults(),
+      config: &RamblaRelay.Config.defaults/0,
       connection: connection,
       owner: owner,
       reservation: reservation

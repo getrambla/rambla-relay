@@ -10,14 +10,24 @@ defmodule RamblaRelay.Socket do
   alias RamblaRelay.HandshakeValidation
   alias RamblaRelay.Ownership.Owner
 
+  # A deployment adapter that forwards a rerouted upgrade sets this header.
+  @rerouted_header "x-rambla-rerouted"
+
   @impl true
   def init(request, options) do
+    config = options.config.()
+
     with true <- :cowboy_websocket.is_upgrade_request(request),
          {:ok, connection} <- connection(request),
+         # Before routing: a daemon that reaches its home node after a client
+         # claimed the session elsewhere still records this node as its home.
+         :ok <- record_daemon_arrival(connection, request, config),
          # Cowboy runs this callback in a request process; request.pid owns the
          # connection before and after the WebSocket upgrade.
          {:local, owner, reservation, admission} <-
-           route(connection, options, Map.fetch!(request, :pid)) do
+           route(connection, options.connection_budget.(), config, Map.fetch!(request, :pid)) do
+      # `config` is a function: the socket reads each setting when it uses it,
+      # so a live change applies to an open socket.
       state = %{
         admission: admission,
         config: options.config,
@@ -31,7 +41,7 @@ defmodule RamblaRelay.Socket do
     else
       {:reroute, _target} = decision ->
         RamblaRelay.Metrics.inc(:reroute_responses)
-        reply(request, 409, reroute_headers(decision, options.reroute_header), "")
+        reply(request, 409, reroute_headers(decision, config.reroute_header), "")
 
       {:unavailable, reason} ->
         reply(request, 503, %{}, Atom.to_string(reason))
@@ -43,9 +53,6 @@ defmodule RamblaRelay.Socket do
       {:error, :pressure} ->
         RamblaRelay.Metrics.inc(:connection_rejections)
         reply(request, 503, %{}, "Relay memory pressure")
-
-      {:error, :configuration_mismatch} ->
-        reply(request, 503, %{}, "Relay capacity configuration")
 
       {:error, :unavailable} ->
         reply(request, 503, %{}, "Relay capacity unavailable")
@@ -60,25 +67,19 @@ defmodule RamblaRelay.Socket do
 
   @impl true
   def websocket_init(state) do
+    config = state.config.()
     Process.flag(:message_queue_data, :off_heap)
 
     Process.flag(:max_heap_size, %{
-      size: state.config.websocket_max_heap_words,
+      size: config.websocket_max_heap_words,
       include_shared_binaries: true,
       kill: true
     })
 
     with {:ok, capacity} <-
-           Capacity.attach_connection(
-             state.admission,
-             state.config.capacity_mutation_timeout_ms
-           ),
+           Capacity.attach_connection(state.admission, config.capacity_mutation_timeout_ms),
          {:ok, writer} <-
-           Writer.start(
-             self(),
-             state.config.delivery_timeout_ms,
-             state.config.control_queue_bytes
-           ) do
+           Writer.start(self(), config.delivery_timeout_ms, config.control_queue_bytes) do
       state =
         Map.put(state, :admission, %{
           token: state.admission,
@@ -102,10 +103,7 @@ defmodule RamblaRelay.Socket do
   def websocket_handle({opcode, payload}, state) when opcode in [:text, :binary] do
     RamblaRelay.Metrics.observe_frame(byte_size(payload))
 
-    case RamblaRelay.Capacity.admit_message(
-           byte_size(payload),
-           state.config.capacity_mutation_timeout_ms
-         ) do
+    case RamblaRelay.Capacity.admit_message(byte_size(payload), capacity_timeout(state)) do
       {:ok, token} -> admit_input(opcode, payload, token, state)
       {:error, _reason} -> {[{:close, 1013, "Relay ingress capacity"}], state}
     end
@@ -194,7 +192,7 @@ defmodule RamblaRelay.Socket do
   defp drain_before_detach(_reason, state), do: state
 
   defp drain_on_close(state) do
-    drain(state, Deadline.after_ms(state.config.delivery_timeout_ms))
+    drain(state, Deadline.after_ms(state.config.().delivery_timeout_ms))
   end
 
   defp drain(%{delivery: %{ref: reference}} = state, deadline) do
@@ -278,12 +276,14 @@ defmodule RamblaRelay.Socket do
   # The Capacity call always keeps its configured timeout: an expiry kills the ledger.
   # A close drain passes its own deadline so every delivery shares one bound.
   defp start_delivery(opcode, payload, token, state, drain_deadline \\ nil) do
-    case RamblaRelay.Capacity.start_delivery(token, state.config.capacity_mutation_timeout_ms) do
+    config = state.config.()
+
+    case RamblaRelay.Capacity.start_delivery(token, config.capacity_mutation_timeout_ms) do
       :ok ->
         source = self()
-        deadline = drain_deadline || Deadline.after_ms(state.config.delivery_timeout_ms)
+        deadline = drain_deadline || Deadline.after_ms(config.delivery_timeout_ms)
         owner = state.owner
-        attach_timeout = state.config.data_attach_timeout_ms
+        attach_timeout = config.data_attach_timeout_ms
 
         task =
           Task.async(fn ->
@@ -331,10 +331,7 @@ defmodule RamblaRelay.Socket do
   defp handle_control_input({:text, payload}, state) do
     RamblaRelay.Metrics.observe_frame(byte_size(payload))
 
-    case RamblaRelay.Capacity.admit_message(
-           byte_size(payload),
-           state.config.capacity_mutation_timeout_ms
-         ) do
+    case RamblaRelay.Capacity.admit_message(byte_size(payload), capacity_timeout(state)) do
       {:ok, token} ->
         result = handle_admitted_control(payload, state)
         :ok = RamblaRelay.Capacity.finish_message(token)
@@ -378,27 +375,55 @@ defmodule RamblaRelay.Socket do
     RamblaRelay.Connection.from_query(query)
   end
 
-  defp admit({namespace, limit}, holder, timeout),
-    do: Capacity.admit_connection(namespace, limit, holder, timeout)
+  defp record_daemon_arrival(connection, request, config) do
+    if daemon_control?(connection) and direct_arrival?(request, config.ip) do
+      RamblaRelay.Placement.daemon_arrived(connection.server_id)
+    end
 
-  defp route(connection, options, holder) do
+    :ok
+  end
+
+  defp daemon_control?(%{role: :server, version: 1}), do: true
+  defp daemon_control?(%{role: :server, version: 2, connection_id: ""}), do: true
+  defp daemon_control?(_connection), do: false
+
+  # Direct means the upgrade did not come through another node's reroute. When
+  # the listener binds one address, a same-host proxy connects from that
+  # address while a remote node's reroute does not.
+  defp direct_arrival?(request, bound_ip) do
+    {peer_ip, _port} = :cowboy_req.peer(request)
+
+    :cowboy_req.header(@rerouted_header, request) == :undefined and
+      (wildcard?(bound_ip) or peer_ip == bound_ip)
+  end
+
+  defp wildcard?(ip), do: ip in [{0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}]
+
+  defp capacity_timeout(state), do: state.config.().capacity_mutation_timeout_ms
+
+  defp route(connection, budget, config, holder) do
     case RamblaRelay.Ownership.resolve(connection.server_id) do
       {:reroute, _target} = decision ->
         decision
 
       decision when decision in [:local, :unowned] ->
-        admit_and_route(connection, options, holder)
+        admit_and_route(connection, budget, config, holder)
     end
   end
 
-  defp admit_and_route(connection, options, holder) do
+  defp admit_and_route(connection, {namespace, limit}, config, holder) do
     with {:ok, admission} <-
-           admit(options.connection_budget, holder, options.config.capacity_mutation_timeout_ms) do
+           Capacity.admit_connection(
+             namespace,
+             limit,
+             holder,
+             config.capacity_mutation_timeout_ms
+           ) do
       decision =
         RamblaRelay.Ownership.route(
           connection.server_id,
-          options.ownership_target,
-          options.config.minimum_cluster_size
+          config.ownership_target,
+          config.minimum_cluster_size
         )
 
       case decision do

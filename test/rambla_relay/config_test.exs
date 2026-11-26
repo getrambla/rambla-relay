@@ -7,6 +7,56 @@ defmodule RamblaRelay.ConfigTest do
     assert Config.load([]) == {:ok, Config.defaults()}
   end
 
+  test "leaves the receive buffer to the kernel and fixes the user-space buffer" do
+    assert {:ok, %{tcp_receive_buffer_bytes: :auto, tcp_user_buffer_bytes: 65_536}} =
+             Config.load([])
+
+    for automatic <- ["auto", ""] do
+      assert {:ok, %{tcp_receive_buffer_bytes: :auto}} =
+               Config.load([{"RAMBLA_RELAY_TCP_RECEIVE_BUFFER_BYTES", automatic}])
+    end
+
+    assert {:ok, %{tcp_receive_buffer_bytes: 1_048_576, tcp_user_buffer_bytes: 32_768}} =
+             Config.load([
+               {"RAMBLA_RELAY_TCP_RECEIVE_BUFFER_BYTES", "1048576"},
+               {"RAMBLA_RELAY_TCP_USER_BUFFER_BYTES", "32768"}
+             ])
+
+    assert Config.load([{"RAMBLA_RELAY_TCP_RECEIVE_BUFFER_BYTES", "1048577"}]) ==
+             {:error,
+              "RAMBLA_RELAY_TCP_RECEIVE_BUFFER_BYTES must be auto or an integer between 4096 and 1048576"}
+
+    assert Config.load([{"RAMBLA_RELAY_TCP_USER_BUFFER_BYTES", "4095"}]) ==
+             {:error,
+              "RAMBLA_RELAY_TCP_USER_BUFFER_BYTES must be an integer between 4096 and 1048576"}
+  end
+
+  test "admits 50,000 WebSockets by default" do
+    assert %{acceptors: 100, connections_per_acceptor: 500} = Config.defaults()
+    assert Config.max_websockets(Config.defaults()) == 50_000
+  end
+
+  test "loads and validates the OOM guard as percentages of total memory" do
+    assert %{oom_min_available_percent: 10, oom_recovery_available_percent: 15} =
+             Config.defaults()
+
+    assert {:ok, %{oom_min_available_percent: 0}} =
+             Config.load([{"RAMBLA_RELAY_OOM_MIN_AVAILABLE_PERCENT", "0"}])
+
+    assert {:ok, %{oom_min_available_percent: 5, oom_recovery_available_percent: 8}} =
+             Config.load([
+               {"RAMBLA_RELAY_OOM_MIN_AVAILABLE_PERCENT", "5"},
+               {"RAMBLA_RELAY_OOM_RECOVERY_AVAILABLE_PERCENT", "8"}
+             ])
+
+    assert Config.load([{"RAMBLA_RELAY_OOM_MIN_AVAILABLE_PERCENT", "51"}]) ==
+             {:error, "RAMBLA_RELAY_OOM_MIN_AVAILABLE_PERCENT must be an integer between 0 and 50"}
+
+    assert Config.load([{"RAMBLA_RELAY_OOM_MIN_AVAILABLE_PERCENT", "20"}]) ==
+             {:error,
+              "RAMBLA_RELAY_OOM_RECOVERY_AVAILABLE_PERCENT must not be lower than RAMBLA_RELAY_OOM_MIN_AVAILABLE_PERCENT"}
+  end
+
   test "loads and validates the Capacity mutation timeout" do
     assert Config.defaults().capacity_mutation_timeout_ms == 5_000
 
@@ -115,5 +165,53 @@ defmodule RamblaRelay.ConfigTest do
            ]) ==
              {:error,
               "RAMBLA_RELAY_INGRESS_BUDGET_BYTES must admit one maximum assembled message at the configured weight"}
+  end
+
+  test "loads and validates the session-healing settings" do
+    assert %{heal_enabled: true, heal_delay_ms: 360_000, heal_rate_per_sec: 25} =
+             Config.defaults()
+
+    assert {:ok, %{heal_enabled: false, heal_delay_ms: 600_000, heal_rate_per_sec: 500}} =
+             Config.load([
+               {"RAMBLA_RELAY_HEAL_ENABLED", "false"},
+               {"RAMBLA_RELAY_HEAL_DELAY_MS", "600000"},
+               {"RAMBLA_RELAY_HEAL_RATE_PER_SEC", "500"}
+             ])
+
+    assert Config.load([{"RAMBLA_RELAY_HEAL_ENABLED", "yes"}]) ==
+             {:error, "RAMBLA_RELAY_HEAL_ENABLED must be true or false"}
+
+    assert Config.load([{"RAMBLA_RELAY_HEAL_DELAY_MS", "-1"}]) ==
+             {:error, "RAMBLA_RELAY_HEAL_DELAY_MS must be an integer between 0 and 86400000"}
+
+    assert Config.load([{"RAMBLA_RELAY_HEAL_RATE_PER_SEC", "0"}]) ==
+             {:error, "RAMBLA_RELAY_HEAL_RATE_PER_SEC must be an integer between 1 and 500"}
+
+    assert Config.load([{"RAMBLA_RELAY_HEAL_RATE_PER_SEC", "501"}]) ==
+             {:error, "RAMBLA_RELAY_HEAL_RATE_PER_SEC must be an integer between 1 and 500"}
+  end
+
+  test "loads and validates the heal attempt window, the cooldown and the home idle limit" do
+    assert %{
+             heal_attempt_window_ms: 120_000,
+             heal_cooldown_ms: 1_800_000,
+             home_max_idle_ms: 604_800_000
+           } = Config.defaults()
+
+    assert {:ok,
+            %{heal_attempt_window_ms: 60_000, heal_cooldown_ms: 0, home_max_idle_ms: 86_400_000}} =
+             Config.load([
+               {"RAMBLA_RELAY_HEAL_ATTEMPT_WINDOW_MS", "60000"},
+               {"RAMBLA_RELAY_HEAL_COOLDOWN_MS", "0"},
+               {"RAMBLA_RELAY_HOME_MAX_IDLE_MS", "86400000"}
+             ])
+
+    assert Config.load([{"RAMBLA_RELAY_HEAL_ATTEMPT_WINDOW_MS", "999"}]) ==
+             {:error,
+              "RAMBLA_RELAY_HEAL_ATTEMPT_WINDOW_MS must be an integer between 1000 and 86400000"}
+
+    assert Config.load([{"RAMBLA_RELAY_HOME_MAX_IDLE_MS", "999"}]) ==
+             {:error,
+              "RAMBLA_RELAY_HOME_MAX_IDLE_MS must be an integer between 1000 and 7776000000"}
   end
 end

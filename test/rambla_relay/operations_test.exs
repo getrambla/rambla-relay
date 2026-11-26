@@ -35,6 +35,10 @@ defmodule RamblaRelay.OperationsTest do
     assert metrics =~ "# TYPE rambla_relay_delivery_wait_seconds histogram"
     assert metrics =~ "# TYPE rambla_relay_frame_size_bytes histogram"
     assert metrics =~ "# TYPE rambla_relay_beam_binary_memory_bytes gauge"
+    assert metrics =~ "# TYPE rambla_relay_memory_watermark_bytes gauge"
+    assert metrics =~ "# TYPE rambla_relay_misplaced_sessions gauge"
+    assert metrics =~ "# TYPE rambla_relay_sessions_healed_total counter"
+    assert metrics =~ "# TYPE rambla_relay_home_promotions_total counter"
     assert metrics =~ "rambla_relay_ready 1"
     assert metrics =~ "rambla_relay_draining 0"
   end
@@ -126,6 +130,7 @@ defmodule RamblaRelay.OperationsTest do
     refute metrics =~ "rambla_relay_ingress_reserved_bytes"
     refute metrics =~ "rambla_relay_inflight_delivery_bytes"
     refute metrics =~ "rambla_relay_backpressured_sources"
+    refute metrics =~ "rambla_relay_memory_watermark_bytes"
     assert metrics =~ "rambla_relay_reroute_responses_total #{reroutes}"
     assert metrics =~ "rambla_relay_active_sessions"
     assert metrics =~ "rambla_relay_delivery_wait_seconds"

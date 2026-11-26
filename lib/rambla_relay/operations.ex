@@ -24,15 +24,15 @@ defmodule RamblaRelay.Operations do
     {:ok, request, nil}
   end
 
-  def response(path), do: response(path, operation_options(configured_runtime()))
+  def response(path), do: response(path, live_options())
 
-  def response(path, %{minimum_cluster_size: _minimum_cluster_size} = config),
-    do: response(path, operation_options(config))
+  def response(path, %RamblaRelay.Config{} = config),
+    do: response(path, RamblaRelay.Listener.handler_options(fn -> config end))
 
   def response("/health", _options), do: {200, "application/json", ~s({"status":"ok"})}
 
   def response("/ready", %{config: config, connection_budget: budget}) do
-    if ready_without_capacity?(config) and ready_capacity?(capacity_status(budget)) do
+    if ready?(config.(), capacity_status(budget)) do
       {200, "application/json", ~s({"status":"ready"})}
     else
       {503, "application/json", ~s({"status":"unready"})}
@@ -46,7 +46,7 @@ defmodule RamblaRelay.Operations do
       [
         "# HELP rambla_relay_ready Whether this node admits new relay work.",
         "# TYPE rambla_relay_ready gauge",
-        "rambla_relay_ready #{if(ready?(config, capacity_status), do: 1, else: 0)}",
+        "rambla_relay_ready #{if(ready?(config.(), capacity_status), do: 1, else: 0)}",
         "# HELP rambla_relay_draining Whether this node is draining.",
         "# TYPE rambla_relay_draining gauge",
         "rambla_relay_draining #{if(draining?(), do: 1, else: 0)}",
@@ -60,6 +60,12 @@ defmodule RamblaRelay.Operations do
 
   def response(_path, _config), do: {404, "text/plain", "not found\n"}
 
+  @doc "Reports whether this node admits new relay work, as `GET /ready` does."
+  def ready? do
+    %{config: config, connection_budget: budget} = live_options()
+    ready?(config.(), capacity_status(budget))
+  end
+
   defp draining?, do: RamblaRelay.Drain.draining?()
 
   defp ready?(config, capacity_status) do
@@ -72,21 +78,12 @@ defmodule RamblaRelay.Operations do
   defp ready_capacity?({:available, %{admission: :open}}), do: true
   defp ready_capacity?(_unavailable_or_closed), do: false
 
-  defp capacity_status({namespace, limit}), do: RamblaRelay.Capacity.status(namespace, limit)
-
-  defp operation_options(config) do
-    %{
-      config: config,
-      connection_budget: {
-        RamblaRelay.Listener,
-        config.acceptors * config.connections_per_acceptor
-      }
-    }
+  defp capacity_status(budget) do
+    {namespace, limit} = budget.()
+    RamblaRelay.Capacity.status(namespace, limit)
   end
 
-  defp configured_runtime do
-    :rambla_relay
-    |> Application.get_env(:runtime, RamblaRelay.Config.defaults())
-    |> RamblaRelay.Config.normalize()
-  end
+  # The options of the production listener.
+  defp live_options,
+    do: RamblaRelay.Listener.handler_options(&RamblaRelay.RuntimeConfig.current/0)
 end

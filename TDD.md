@@ -695,3 +695,185 @@
 - The first local minimal-container run exhausted its default descriptor limit
   in the existing unread-control pressure fixture. Repeating with the documented
   real-socket test budget passed; application and pressure-test code were unchanged.
+
+## Session healing and live settings
+
+- Red against `HEAD` before the change, with the new tests copied over the old
+  code: `config_test` failed "loads and validates the session-healing settings";
+  `operations_test` failed the metrics surface test on the missing
+  `rambla_relay_memory_watermark_bytes`, `misplaced_sessions`,
+  `sessions_healed_total` and `home_promotions_total` families; the home-map,
+  arrival and `RuntimeConfig` tests failed because `Placement.Homes`,
+  `Placement.home/1` and `RuntimeConfig.get/0` did not exist; the five `:peer`
+  healing tests failed because the config had no `heal_delay_ms`.
+- Green: `placement_test.exs` starts two full relay applications on real `:peer`
+  nodes with real Cowboy listeners and WebSockex daemons and clients.
+  - Failover and heal-back: a daemon homed on A fails over to B when A stops.
+    While A is down, a new daemon on B gets no home, because B's static cluster
+    is incomplete. When A returns, B waits at least the heal delay, closes the
+    daemon with `1012 Session owner moved`, and the daemon is admitted on A at
+    once, without the Owner's 30-second idle grace.
+  - Idle first and rate cap: with three idle and two client-attached sessions
+    and `heal_rate_per_sec: 2`, the closes arrive in tick batches of 2, 2 and 1.
+    The first batch is idle only and the last is active only.
+  - Health gating: B does not heal toward A while A drains or has memory
+    pressure, and heals after A recovers. After B disconnects from A with a
+    60-second delay and then lowers it to 3 seconds, the heal comes at least 3
+    seconds after the disconnect, so the ready period restarted.
+  - Boomerang: a daemon that returns directly to B after a heal is not moved
+    during the cooldown, is moved once after it, and its second return makes B
+    its home on both nodes with `home_promotions_total 1`. The session then
+    stays on B.
+  - Client-won race: a client claims the session on B; the daemon's direct
+    arrival at A gets `409`, still records A, and B moves the session to A.
+- Green: `placement_arrival_test.exs` binds a listener to `127.0.0.2` and sends
+  raw upgrades from chosen source addresses. Direct v1 and v2 daemon control
+  arrivals record a home. Client and v2 data connections, an upgrade with
+  `x-rambla-rerouted`, and an upgrade from `127.0.0.3` record none, and a later
+  client arrival does not replace a home.
+- Green: `placement_homes_test.exs` proves newest-write-wins with a stable tie
+  break, eviction of the least recently written entry at the entry limit, and
+  bounded idle eviction.
+- Green: `runtime_config_test.exs` rejects each out-of-range value, a wrong
+  type and an unknown key, and one invalid value rejects the whole change. A
+  valid change applies the watermark to Capacity and `/metrics` and the heal
+  settings to Placement while an open daemon socket still answers a ping. The
+  values stay after Capacity and Placement.Server are killed and restarted.
+- Mutation checks against the green code, each caught by the named test:
+  `relocate/1` as a no-op (failover: no `1012`); active sessions before idle
+  ones and no rate cap (idle-first: wrong batches); keeping `ready_since` across
+  unready polls (gating: healed while A drained); no boomerang counting
+  (boomerang: moved during the cooldown); no cluster gate (failover: `unseen`
+  got home B); recording the arrival after the reroute decision (client-won: A
+  never learned the home); any role learning, ignoring the header, and
+  ignoring the peer address (arrival: the matching session got a home).
+
+### Review fixes
+
+- Red against the first green version, each for the reviewed bug:
+  - `placement_attempts_test.exs`: after a first boomerang at a negative
+    monotonic time, the attempt was still kept one cooldown after its cooldown
+    (`size` 1, expected 0). The missing `healed_at` counted as time `0`.
+  - `placement_test.exs` "a daemon that stays connected keeps its home past the
+    idle limit": with a 2-second idle limit, the home of a daemon still
+    connected to A was `nil` on A and B after 4.5 seconds.
+  - `runtime_config_test.exs`: with `Placement.Server` suspended, and with
+    Capacity suspended under a 200 ms mutation timeout, `put/1` returned
+    `{:ok, ...}`.
+  - `placement_homes_test.exs` failed on the missing `evict_idle/4`.
+- Green: an expired first boomerang is forgotten at negative times, and its
+  cooldown still blocks a heal until it ends. Idle eviction rewrites a home
+  whose session is owned on that home and removes the others. Rewritten entries
+  count toward the batch limit, and a newer replicated write still wins. On two
+  `:peer` relays, the connected daemon keeps home A on both nodes while an entry
+  for an ended session is removed. `put/1` returns
+  `Placement is unavailable; nothing changed` and restores the stored settings
+  and Capacity's watermark. After Placement resumes, the late reload applies the
+  previous settings. When Capacity times out, `put/1` returns
+  `Capacity is unavailable; nothing changed`, and Capacity restarts with the
+  previous watermark.
+- Mutation check: without the watermark rollback, the Placement test reads the
+  new watermark in `/metrics`.
+- The heal scan and `misplaced_sessions` fold over the session index instead of
+  copying it each tick. The existing healing tests cover the change.
+
+## Receive buffer for high-RTT ingress
+
+- Reproduction: the pinned image with a 64 KiB receive buffer and a synthetic
+  24 MiB response over a 210 ms delayed local TCP path made the real Rambla SDK
+  miss two heartbeat replies and disconnect after 50 seconds. Changing only
+  the buffer to 1 MiB kept it connected throughout 60 seconds. The peer queued
+  pong replies promptly; ordered delivery held them behind the large response.
+  This is a conditional mechanism test, not attribution of issue #8491; the
+  responder substitutes opaque framing for E2EE and the response size is synthetic.
+- Red: the new default/rollback config regression failed on 65536 versus
+  1048576 (9/10 config tests passed). The previous override remains valid and
+  values above the existing 1 MiB maximum remain rejected.
+- Change: increase the default only; retain all admission, heap, delivery,
+  watermark and maximum-buffer limits. The real listener test checks Ranch's
+  effective configured socket options rather than assuming a host kernel limit.
+- Deployment constraint: kernel socket memory is outside the BEAM watermark.
+  Aggregate slow-reader memory at fleet scale remains a rollout qualification;
+  the per-socket maximum is not preallocated memory. Roll back through the
+  explicit 65536-byte environment override and a drained relay replacement.
+- Candidate image built locally as `rambla-relay:receive-buffer-1mib`. Runtime
+  RPC reads 1048576 without an environment override. Two completed real-SDK
+  24 MiB / 210 ms runs stayed connected through 60 seconds. An earlier attempt
+  timed out during connection setup before the large transfer; its exact cause
+  remains unestablished. The retained harness now subscribes to data frames
+  before awaiting upgrade, removing a possible missed-first-frame race.
+- Verification qualification: formatting and warnings-as-errors compilation
+  passed. Full suite: 104/107; the ingress-budget maximum-frame receipt timed
+  out again in isolation with BOTH the new 1 MiB and original 64 KiB defaults.
+  The slow-reader shedding and initial control-notification tests failed in
+  the suite but passed individually with both defaults. No assertions or
+  safety limits were relaxed to obtain a green result. This is not an
+  all-green release gate. Raw logs and baseline source are retained under
+  `.artifacts/receive-buffer-change/`.
+- Focused configuration and real-listener verification passed 20/20.
+
+## Live settings by default, OOM guard and socket buffers
+
+- Problem: a node needed a restart for most settings; the memory guard needed a
+  BEAM byte limit for each host; and the 1 MiB default `recbuf` without an
+  explicit `buffer` turned off the kernel's receive sizing and raised the
+  user-space buffer of each socket to 1 MiB.
+- Red against `HEAD`: the new and changed tests in the system memory, config,
+  runtime config, listener and static cluster suites passed 16 of 48.
+  `RamblaRelay.SystemMemory` did not exist. `Config` had no
+  `tcp_user_buffer_bytes`, OOM percentages, heal attempt window, cooldown or
+  home idle limit, kept `connections_per_acceptor` at 200 and rejected `auto`
+  for the receive buffer. `RuntimeConfig.put/1` rejected every key outside its
+  four-key list, and `Config` had no `boot_only/0` or `live_keys/0` for the
+  guard test. The default listener had no `buffer` socket option, and a listener
+  with an explicit `recbuf` read `buffer: 1048576`. StaticCluster needed a
+  fixed `nodes` option. The OOM guard tests shed nothing, because Capacity only
+  compared BEAM memory with a byte watermark.
+- Red for container file cache: `SystemMemory.parse/4` was undefined, and a
+  container with 512 MiB of room and 1 GiB of file cache read 1073741824
+  available bytes instead of 1610612736 (6 of 8).
+- Green, settings: `Config` is one table of field, default, environment variable
+  and rule. A field is live unless `boot_only/0` lists it. The guard test fails
+  when a new field has no entry in its change table and is not boot only, and it
+  puts and reads back every live key on a running node.
+- Green, application: `RuntimeConfig.put/1` validates with the environment rules,
+  hands Capacity its settings with a GenServer call, stores the config in
+  `:persistent_term` and the application environment, and then updates Ranch
+  and the open sockets. Tests on the real listener prove that an open daemon
+  WebSocket answers a ping after a change of every live setting, that an open
+  socket and a later socket read the new `buffer` and `send_timeout`, that a
+  full node admits again after a higher ceiling, and that a rejected change and
+  a Capacity timeout leave every value as it was. A change of a setting that
+  Capacity does not hold succeeds while Capacity is stalled. A restarted
+  listener starts with the live values.
+- Green, guard: with fixture memory files, Capacity sheds when the available
+  memory is below 10 percent of the total, keeps admission paused between 10
+  and 15 percent, and admits again at 15 percent. A container limit bounds the
+  total and the available memory. `0` disables the guard, and a watermark above
+  0 replaces it. The three new gauges report the reading and the floor.
+- Green, buffers: the default listen socket reads `buffer: 65536` and has no
+  `recbuf` option. An explicit receive buffer keeps the explicit user buffer.
+- Removed with their callers: `Drain`'s Agent, `Placement.reload_settings/0` and
+  `settings/0`, `RuntimeConfig.overlay/1`, the per-namespace limit in Capacity
+  and its `:configuration_mismatch` reply. Placement, StaticCluster, the socket
+  handler and the operations endpoints read the live config where they use it.
+- Limits: a socket with an explicit kernel receive buffer cannot return to
+  kernel sizing, so `tcp_receive_buffer_bytes: :auto` applies to the sockets of
+  a listener that starts later. `http_idle_timeout_ms`, `control_queue_bytes`
+  and `websocket_max_heap_words` apply to new connections. The guard reads
+  cgroup v2 only.
+- Test repairs: the placement tests used `Placement.settings/0` as a barrier
+  and now use a system call to the Placement server. The router metrics test
+  read the first sync frame with a second `recv` and timed out when the frame
+  arrived with the upgrade response; it now accepts both orders.
+- Verification: `scripts/ci.sh` passed: format, warnings as errors, the full
+  suite (150 passed), the production release and the container health,
+  readiness, metrics and restart checks.
+- Red, socket loop: a change of only `connections_per_acceptor` and
+  `http_idle_timeout_ms` wrote the socket options of every open socket again.
+  A socket with a `send_timeout` of 12345 that no setting holds read 35000
+  after the change (10 of 11). On a full node that loop is longer than an RPC
+  timeout.
+- Green: the listener calls the open sockets only when `buffer`, `recbuf` or
+  `send_timeout` changed. The socket keeps 12345 after the ceiling change and
+  reads 40000 after a change of `transport_send_timeout_ms`.

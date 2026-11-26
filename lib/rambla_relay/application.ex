@@ -3,17 +3,14 @@ defmodule RamblaRelay.Application do
 
   @impl true
   def start(_type, _args) do
-    config =
-      RamblaRelay.Config.normalize(
-        Application.get_env(:rambla_relay, :runtime, RamblaRelay.Config.defaults())
-      )
+    config = RamblaRelay.RuntimeConfig.boot()
 
     children = [
       {DNSCluster, query: config.cluster_query || :ignore},
-      {RamblaRelay.StaticCluster, nodes: config.cluster_nodes},
-      {RamblaRelay.Drain, config.drain},
+      RamblaRelay.StaticCluster,
       RamblaRelay.Metrics,
-      {RamblaRelay.RuntimeSupervisor, config}
+      RamblaRelay.Placement,
+      RamblaRelay.RuntimeSupervisor
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one, name: RamblaRelay.Supervisor)
